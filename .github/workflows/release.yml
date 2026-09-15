@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to (re-)release, e.g. 1.0.0. Required for manual runs.'
+        required: true
+      force-retag:
+        description: 'Delete and recreate the tag if it already exists'
+        type: boolean
+        default: false
+
+jobs:
+  parse-version:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/') && github.base_ref == 'master')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - id: parse
+        uses: tcfoss/github-actions/.github/actions/parse-release-version@v1
+        with:
+          branch: ${{ github.head_ref }}
+          version-override: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+
+  tag:
+    needs: parse-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Tag release
+        run: |
+          version="v${{ needs.parse-version.outputs.version }}"
+          if [[ "${{ inputs.force-retag }}" == "true" ]]; then
+            git push origin ":refs/tags/$version" || true
+            git tag -d "$version" 2>/dev/null || true
+          fi
+          git tag -a "$version" -m "Release $version"
+          git push origin "$version"
+
+  publish-pypi:
+    needs: [parse-version, tag]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install poetry dynamic versioning plugin
+        run: poetry self add "poetry-dynamic-versioning[plugin]"
+
+      - name: Build package
+        run: poetry build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  finalize-release:
+    needs: [parse-version, tag, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve release
+        uses: tcfoss/github-actions/.github/actions/issuetracker-resolve@v1
+        with:
+          api-url: ${{ vars.ISSUETRACKER_API_URL }}
+          version: ${{ needs.parse-version.outputs.version }}
+          token: ${{ secrets.ISSUETRACKER_API_TOKEN }}
+          release-url: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.parse-version.outputs.version }}
+
+      - name: Release notes
+        id: notes
+        uses: tcfoss/github-actions/.github/actions/issuetracker-notes@v1
+        with:
+          api-url: ${{ vars.ISSUETRACKER_API_URL }}
+          version: ${{ needs.parse-version.outputs.version }}
+          token: ${{ secrets.ISSUETRACKER_API_TOKEN }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.parse-version.outputs.version }}
+          body_path: ${{ steps.notes.outputs.notes-file }}

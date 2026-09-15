@@ -1,0 +1,98 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Lint (mypy)
+        run: poetry run mypy src
+
+      - name: Lint (pylint)
+        run: poetry run pylint src
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Test
+        run: poetry run pytest --cov=net_install_manager --cov-report=xml:TestResults/coverage.cobertura.xml
+
+      - name: Normalize coverage reports
+        run: |
+          mkdir -p CoverageResults
+          cp TestResults/coverage.cobertura.xml CoverageResults/coverage-unit-1.cobertura.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: CoverageResults/*.cobertura.xml
+
+  today:
+    runs-on: ubuntu-latest
+    outputs:
+      date: ${{ steps.today.outputs.date }}
+    steps:
+      - id: today
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+  validate-release:
+    needs: today
+    if: startsWith(github.head_ref, 'release/')
+    uses: tcfoss/github-actions/.github/workflows/validate-release.yml@v1
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      branch: ${{ github.head_ref }}
+      api-url: ${{ vars.ISSUETRACKER_API_URL }}
+      release-date: ${{ needs.today.outputs.date }}
+    secrets:
+      issuetracker-api-token: ${{ secrets.ISSUETRACKER_API_TOKEN }}
+
+  coverage:
+    needs: unit-tests
+    if: >
+      always() &&
+      needs.unit-tests.result == 'success'
+    uses: tcfoss/github-actions/.github/workflows/coverage.yml@v1
+    permissions:
+      contents: read
+      pull-requests: write
