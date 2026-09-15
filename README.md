@@ -14,7 +14,7 @@ A CLI tool (installable via `pipx`) for managing installations, rollbacks, versi
 ## Installation
 
 ```bash
-pipx install .
+pipx install net-install-manager
 ```
 
 ## CLI Usage

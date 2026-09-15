@@ -25,6 +25,10 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[project.urls]
+homepage = "https://github.com/tcfoss/net-install-manager"
+repository = "https://github.com/tcfoss/net-install-manager.git"
+
 [project.scripts]
 ninman = "net_install_manager.net_install_manager:main"
 
