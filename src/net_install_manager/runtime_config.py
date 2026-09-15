@@ -1,5 +1,7 @@
 """Information about application runtime environment and installation configuration."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import os
 from pathlib import Path

@@ -1,5 +1,7 @@
 """Utilities for inspecting the current platform (OS, user, architecture)."""
 
+from __future__ import annotations
+
 import ctypes
 from dataclasses import dataclass
 from enum import Enum
