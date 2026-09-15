@@ -19,7 +19,12 @@ pipx install net-install-manager
 
 ## CLI Usage
 
+### Installing an Application
+
 ```bash
+# Install a prebuilt asset from a GitHub release
+ninman install-release owner repo --asset-pattern "{rid}-{version}"
+
 # Install from a local .csproj file or current directory
 ninman install
 ninman install ./src/MyApp/MyApp.csproj
@@ -29,9 +34,6 @@ ninman install ./dist/MyApp-v1.2.0
 ninman install https://github.com/owner/repo.git
 ninman install owner/repo
 ninman install owner/repo@v1.2.0
-
-# Install a prebuilt asset from a GitHub release
-ninman install-release owner repo --asset-pattern "{rid}-{version}"
 
 # Multi-project repositories: select a specific project via subpath or --project
 ninman install https://github.com/owner/repo.git --project src/CliApp/CliApp.csproj
@@ -43,27 +45,37 @@ ninman install --self-contained --versions-to-keep 3
 
 # Force installation / reinstallation of older version
 ninman install --force --app-version 1.0.0
+```
 
-# List installed versions
-ninman list-versions
+### Application Maintenance
 
-# List all tracked applications managed by ninman
-ninman list-apps
-
+```bash
 # Upgrade an application or all tracked applications
-ninman upgrade
 ninman upgrade myapp
 ninman upgrade --all
 
 # Rollback to the previous version
-ninman rollback --previous
+ninman rollback --previous myapp
 
 # Rollback to a specific version
-ninman rollback --target-version 1.1.0
+ninman rollback --target-version 1.1.0 myapp
 
 # Uninstall a specific version or everything
-ninman uninstall --target-version 1.0.0
+ninman uninstall --target-version 1.0.0 myapp
 ninman uninstall --all
+```
+
+### Installation Status
+
+```bash
+# List all tracked applications managed by ninman
+ninman list-apps
+
+# Describe the installation details of a given application
+ninman app-details myapp
+
+# List installed versions of a given application
+ninman list-versions myapp
 ```
 
 GitHub release installations discover `ninman.yml`, `ninman.yaml`, or a `.csproj` from the
