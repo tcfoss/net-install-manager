@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import shutil
 import logging
@@ -139,6 +140,8 @@ class AppManager:
                     source=source,
                     quiet=options.quiet,
                 )
+                if binary_path.name != self.config.source_binary_name:
+                    self.config = replace(self.config, source_binary_name=binary_path.name)
 
             version = resolve_version(
                 explicit_version=options.explicit_version,
