@@ -6,8 +6,8 @@ A CLI tool (installable via `pipx`) for managing installations, rollbacks, versi
 
 - **Source, Pre-compiled & Git Support**: Install directly from `.csproj` source, pre-compiled binaries (DLLs/EXEs), or remote Git/GitHub repositories.
 - **Cross-Platform**:
-  - **Linux / macOS**: Installs to `~/.local/lib/<app>/<version>` (or `/usr/local/lib` for system), atomic `current` symlinks, and launchers in `~/.local/bin`.
-  - **Windows**: Installs to `%LOCALAPPDATA%\<app>\versions\<version>` (or `Program Files` for system), `current` directory junctions, and `.cmd` + bash launchers in `bin/`.
+  - **Linux / macOS**: Installs to `~/.local/lib/<app>/<version>` (or `/usr/local/lib` for system) and creates launchers in `~/.local/bin`.
+  - **Windows**: Installs to `%LOCALAPPDATA%\<app>\versions\<version>` (or `Program Files` for system) and creates launchers in `%USERPROFILE%\.local\bin` (`bin/` for system installs).
 - **Version Management & Rollback**: Automatic version detection (csproj, git tags, binary `--version`), version regression checks, rollback to previous versions, and version pruning (`--versions-to-keep`).
 - **Application Registry & Upgrades**: Track installed applications and upgrade them directly (`ninman upgrade <app>` or `ninman upgrade --all`), including fetching the latest Git commits/tags.
 

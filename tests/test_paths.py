@@ -83,6 +83,7 @@ def test_paths_windows_user(sample_config):
     fake_env = {"LOCALAPPDATA": r"C:\Users\testuser\AppData\Local"}
     runtime = RuntimeInfo(
         env=fake_env,
+        home_dir=get_winpath(r"C:\Users\testuser"),
         platform=PlatformInfo(
             os=OperatingSystem.WINDOWS,
             architecture=PlatformInfo.detect().architecture,
@@ -95,8 +96,9 @@ def test_paths_windows_user(sample_config):
         runtime=runtime,
     )
     assert paths.lib_dir == get_winpath(r"C:\Users\testuser\AppData\Local\my_app\versions")
-    assert paths.bin_dir == get_winpath(r"C:\Users\testuser\AppData\Local\my_app\bin")
-    assert paths.bin_path == get_winpath(r"C:\Users\testuser\AppData\Local\my_app\bin\my_bin")
+    assert paths.current_dir == get_winpath(r"C:\Users\testuser\AppData\Local\my_app\current")
+    assert paths.bin_dir == get_winpath(r"C:\Users\testuser\.local\bin")
+    assert paths.bin_path == get_winpath(r"C:\Users\testuser\.local\bin\my_bin")
 
 
 def test_paths_windows_system(sample_config):

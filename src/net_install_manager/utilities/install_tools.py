@@ -183,7 +183,31 @@ def get_paths_no_buildable_source(
     else:
         copy_source = source_as_path
         binary_path = source_as_path / binary_name
+        if not binary_path.exists():
+            for candidate_name in _binary_name_variants(binary_name):
+                candidate_path = source_as_path / candidate_name
+                if candidate_path.exists():
+                    binary_path = candidate_path
+                    break
     if not binary_path.exists():
         raise AppManagerError(f"Binary not found at expected location '{binary_path}'.")
 
     return copy_source, binary_path
+
+
+def _binary_name_variants(binary_name: str) -> list[str]:
+    """Return alternate binary names to try when an OS-specific extension is missing/extra."""
+    if binary_name.lower().endswith(".exe"):
+        return [binary_name[: -len(".exe")]]
+    return [f"{binary_name}.exe"]
+
+
+__all__ = [
+    "InstallSource",
+    "BuildableInstallSource",
+    "find_csproj_files",
+    "get_csproj_path",
+    "get_buildable_source",
+    "get_paths_with_buildable_source",
+    "get_paths_no_buildable_source",
+]

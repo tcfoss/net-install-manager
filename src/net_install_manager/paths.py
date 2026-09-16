@@ -57,7 +57,11 @@ def get_paths(
         lib_dir = app_root / "versions"
         versions_dir = lib_dir
         current_dir = app_root / "current"
-        bin_dir = app_root / "bin"
+        bin_dir = (
+            app_root / "bin"
+            if runtime.system_wide
+            else runtime.home_dir / ".local" / "bin"
+        )
 
     bin_path = bin_dir / config.binary_name
 
