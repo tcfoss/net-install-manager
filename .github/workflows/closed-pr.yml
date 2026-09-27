@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to (re-)release, e.g. 1.0.0. Required for manual runs.'
+        required: true
+      force-retag:
+        description: 'Delete and recreate the tag if it already exists'
+        type: boolean
+        default: false
+
+jobs:
+  resolve-work-items:
+    if: github.event.pull_request.merged == true
+    uses: tcfoss/github-actions/.github/workflows/resolve-pr-work-items.yml@v1
+    permissions:
+      contents: read
+    with:
+      pull-request-description: ${{ github.event.pull_request.body }}
+      api-url: ${{ vars.ISSUETRACKER_API_URL }}
+      target-status: Done
+    secrets:
+      issuetracker-api-token: ${{ secrets.ISSUETRACKER_API_TOKEN }}
+
+  parse-version:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/') && github.base_ref == 'master')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - id: parse
+        uses: tcfoss/github-actions/.github/actions/parse-release-version@v1
+        with:
+          branch: ${{ github.head_ref }}
+          version-override: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+
+  tag:
+    needs: parse-version
+    uses: tcfoss/github-actions/.github/workflows/tag-release.yml@v1
+    permissions:
+      contents: write
+    with:
+      version: ${{ needs.parse-version.outputs.version }}
+      force-retag: ${{ inputs.force-retag == true }}
+    secrets:
+      TAGGER_APP_CLIENT_ID: ${{ secrets.TAGGER_APP_CLIENT_ID }}
+      TAGGER_APP_PRIVATE_KEY: ${{ secrets.TAGGER_APP_PRIVATE_KEY }}
+
+  publish-pypi:
+    needs: [parse-version, tag]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install poetry dynamic versioning plugin
+        run: poetry self add "poetry-dynamic-versioning[plugin]"
+
+      - name: Build package
+        run: poetry build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  finalize-release:
+    needs: [parse-version, tag, publish-pypi, resolve-work-items]
+    # resolve-work-items is skipped on workflow_dispatch
+    if: >
+      !cancelled() &&
+      needs.publish-pypi.result == 'success' &&
+      (needs.resolve-work-items.result == 'success' || needs.resolve-work-items.result == 'skipped')
+    uses: tcfoss/github-actions/.github/workflows/finalize-release.yml@v1
+    permissions:
+      contents: write
+    with:
+      version: ${{ needs.parse-version.outputs.version }}
+      api-url: ${{ vars.ISSUETRACKER_API_URL }}
+      release-status: Released
+      work-item-status: Released
+    secrets:
+      issuetracker-api-token: ${{ secrets.ISSUETRACKER_API_TOKEN }}
