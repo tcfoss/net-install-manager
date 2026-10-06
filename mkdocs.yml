@@ -1,0 +1,11 @@
+site_name: .NET Installation Manager (ninman)
+site_url: https://github.com/tcfoss/net-install-manager
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Installing Applications: installing.md
+  - Versioning: versioning.md
+  - Maintenance: maintaining.md
