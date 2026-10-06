@@ -1,5 +1,7 @@
 """Information about the current OS."""
 
+from __future__ import annotations
+
 from enum import Enum
 import platform
 
