@@ -82,6 +82,36 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+  publish-docs:
+    needs: [parse-version, tag, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: tcfoss/github-actions/.github/actions/setup-poetry@v1
+
+      - uses: actions/configure-pages@v6
+
+      - name: Build documentation
+        run: poetry run mkdocs build --strict
+
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
   finalize-release:
     needs: [parse-version, tag, publish-pypi, resolve-work-items]
     # resolve-work-items is skipped on workflow_dispatch

@@ -49,6 +49,7 @@ ninman install ./src/MyApp
 
 The app name and source binary are inferred from the project assembly name. For the version detection order and how to set `--version-override`, see [Versioning](versioning.md).
 
+
 ### GitHub Releases
 
 Use `owner:repo` to select the latest release, or `owner:repo:tag` to select a specific release. `ninman` needs to select a single release asset to download. If a release contains multiple assets, supply `--asset-pattern` to narrow the selection; it is a regular expression matched against asset names. The default pattern is `{rid}-{version}`. `{rid}`, `{os}`, `{arch}`, and `{version}` are substituted before matching, and exactly one asset must match. If the release has exactly one asset, you can use `--asset-pattern '.*'` to match it.
@@ -71,7 +72,8 @@ ninman install octocat:my-app:v1.2.0 \
 
 For private releases, pass `--token TOKEN` or set one of `NINMAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`. Tokens are used for requests and are not stored in the registry.
 
-A `ninman.yaml`/`ninman.yml` manifest inside the release asset can supply application naming information. Release assets are selected by matching their names, so choose a pattern that uniquely identifies the asset for this operating system and architecture.
+A `ninman.yaml`/`ninman.yml` manifest inside the release asset can supply application naming information.
+
 
 ### Remote Git Repositories
 
@@ -84,11 +86,14 @@ ninman install owner/repo#src/MyApp
 ninman install https://github.com/owner/repo/tree/main/src/MyApp
 ```
 
-The selected subpath can be a `.csproj` file or a directory containing exactly one project. Without a subpath, `ninman` searches the repository for a project. The repository is cached locally and refreshed when it is used again.
+The selected subpath can be a `.csproj` file or a directory containing exactly one project. Without a subpath, `ninman` searches the repository for a project. If the repository contains multiple projects, you must specify a subpath.
+
+The repository is cached locally and refreshed when it is used again.
+
 
 ### Local Published Applications
 
-Pass a directory of prebuilt application files. `ninman` copies the directory into its versioned installation and requires the source binary name and version to be identifiable. Use `--source-binary-name` if the executable/DLL name cannot be inferred. See [Versioning](versioning.md) for how version detection works and when to use `--version-override`.
+Pass a directory of prebuilt application files. `ninman` copies the directory into its versioned installation and requires the source binary name and version to be identifiable. Use `--source-binary-name` unless the directory contains a manifest. See [Versioning](versioning.md) for how version detection works and when to use `--version-override`.
 
 ```bash
 ninman install ./publish \

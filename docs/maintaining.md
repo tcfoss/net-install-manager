@@ -29,7 +29,11 @@ Upgrade a tracked application from its recorded source:
 ninman upgrade my-app
 ```
 
-For a Git source, `--new-ref` selects a different ref for the upgrade. For a GitHub release source, `--new-release-tag` selects a release tag; omit the value to return to the latest release. `--version-override` supplies a version when automatic detection is unsuitable; see [Versioning](versioning.md) for the detection rules. `--force` allows overwriting an already-installed version, and `--token` authenticates to private sources.
+For a Git source, `--new-ref` selects a different ref for the upgrade. Supply the flag with no value to switch to the repository's default ref (usually the `main` or `master` branch).
+
+For a GitHub release source, `--new-release-tag` selects a release tag. Use the flag with no value to switch to the latest release. If the releases are private, supply `--token TOKEN` or set one of `NINMAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
+
+If automatic version detection is unsuitable, supply `--version-override VERSION`; see [Versioning](versioning.md) for details. The `--force` flag allows overwriting an already-installed version.
 
 ```bash
 ninman upgrade my-app --new-ref main
@@ -57,7 +61,7 @@ Or prune versions outside a range. Use at least one bound; versions below `--min
 ninman prune my-app --min-version 1.2.0 --max-version 2.0.0
 ```
 
-If pruning removes the current version, `ninman` asks before switching to the newest version that remains. Pass `--yes` (or `-y`) to confirm automatically. The command will not remove every installed version.
+If pruning removes the current version, `ninman` asks before switching to the newest version that remains. Pass `--yes` (or `-y`) to confirm automatically. At least one version must remain at the end of pruning.
 
 
 ## Uninstalling an Application Completely
