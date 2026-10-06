@@ -1,68 +1,50 @@
-"""List versions command for the Net Install Manager application."""
+"""Command to list installed versions of an application."""
 
 import argparse
-from net_install_manager.cli_output import write
-from net_install_manager.runtime_config import RuntimeInfo
-from net_install_manager.app_manager import AppManager
-from net_install_manager.utilities.resolve_manager import resolve_manager
-from net_install_manager.registry import AppRegistry
+from dataclasses import dataclass
+
+from net_install_manager.commands.base_command import BaseCommand
+from net_install_manager.core import errors
+from net_install_manager.runtime.runtime import Runtime
+from net_install_manager.core.registry import Registry
 
 
-def execute(
-    args: argparse.Namespace,
-    manager: AppManager | None = None,
-    registry: AppRegistry | None = None,
-    runtime: RuntimeInfo | None = None,
-) -> int:
-    """Execute the list versions command."""
-    runtime = runtime or RuntimeInfo.current()
-    manager = resolve_manager(args, runtime, manager, registry, app_manager_cls=AppManager)
+@dataclass
+class ListVersionsArgs:
+    """Arguments for the list versions command."""
 
-    versions = manager.get_installed_versions()
-    current_ver = manager.get_current_version()
-
-    if not versions:
-        write(f"No installed versions found for '{manager.config.binary_name}'.")
-        return 0
-
-    if not args.reverse:
-        # Default: ascending order (oldest to newest) or descending based on args
-        versions = list(reversed(versions))
-
-    for version in versions:
-        if version == current_ver:
-            write(f"{version} (current)")
-        else:
-            write(f"{version}")
-
-    return 0
+    app_name: str
+    reverse: bool = False
 
 
-def register_list_versions_command(
-    subparsers: argparse._SubParsersAction,
-) -> argparse.ArgumentParser:
-    """Register the list-versions command arguments."""
-    # pylint: disable=duplicate-code
+class ListVersionsCommand(BaseCommand[ListVersionsArgs]):
+    """Command to list installed versions of an application."""
 
-    parser = subparsers.add_parser(
-        "list-versions", help="List all installed versions of a .NET application"
-    )
-    parser.add_argument(
-        "app_name",
-        nargs="?",
-        default=None,
-        help=(
-            "Name of the tracked application to list versions for "
-            "(optional if running in project directory)"
-        ),
-    )
-    parser.add_argument(
-        "-r",
-        "--reverse",
-        action="store_true",
-        help="List versions in reverse order (newest first)",
-    )
-    return parser
+    def execute(self, runtime: Runtime, args: ListVersionsArgs) -> None:
 
+        registry = Registry(runtime)
+        versions = registry.get_installed_versions(args.app_name)
 
-__all__ = ["execute", "register_list_versions_command"]
+        if not versions:
+            raise errors.AppNotRegisteredError(args.app_name, runtime.registry_path)
+
+        for version in sorted(versions.versions, reverse=not args.reverse):
+            current_label = " (current)" if version == versions.current else ""
+            print(f" - {version}{current_label}")
+
+    @staticmethod
+    def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+        parser = subparsers.add_parser(
+            "list-versions", help="List installed versions of an application."
+        )
+        parser.add_argument(
+            "app_name", type=str, help="Name of the application to list versions for."
+        )
+        parser.add_argument(
+            "--reverse", action="store_true", help="List versions from oldest to newest."
+        )
+        return parser
+
+    @staticmethod
+    def parse_arguments(runtime: Runtime, args: argparse.Namespace) -> ListVersionsArgs:
+        return ListVersionsArgs(app_name=args.app_name, reverse=args.reverse)

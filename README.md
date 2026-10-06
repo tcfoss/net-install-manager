@@ -1,92 +1,24 @@
 # Net Install Manager (`ninman`)
 
-A CLI tool (installable via `pipx`) for managing installations, rollbacks, versioning, and uninstallation of .NET console applications across Linux, macOS, and Windows.
+`ninman` installs and manages versioned .NET console applications on Linux, macOS, and Windows. It can build from a project or Git repository, install local or GitHub release artifacts, and manage upgrades, rollbacks, and cleanup.
 
-## Features
+**Documentation:** [tcfoss.github.io/net-install-manager](https://tcfoss.github.io/net-install-manager/)
 
-- **Source, Pre-compiled & Git Support**: Install directly from `.csproj` source, pre-compiled binaries (DLLs/EXEs), or remote Git/GitHub repositories.
-- **Cross-Platform**:
-  - **Linux / macOS**: Installs to `~/.local/lib/<app>/<version>` (or `/usr/local/lib` for system) and creates launchers in `~/.local/bin`.
-  - **Windows**: Installs to `%LOCALAPPDATA%\<app>\versions\<version>` (or `Program Files` for system) and creates launchers in `%USERPROFILE%\.local\bin` (`bin/` for system installs).
-- **Version Management & Rollback**: Automatic version detection (csproj, git tags, binary `--version`), version regression checks, rollback to previous versions, and version pruning (`--versions-to-keep`).
-- **Application Registry & Upgrades**: Track installed applications and upgrade them directly (`ninman upgrade <app>` or `ninman upgrade --all`), including fetching the latest Git commits/tags.
+## Install
 
-## Installation
+Requires Python 3.12 or newer. The .NET SDK is needed to install from project source; Git is needed for remote Git sources.
 
 ```bash
 pipx install net-install-manager
 ```
 
-## CLI Usage
-
-### Installing an Application
+## Quick Start
 
 ```bash
-# Install a prebuilt asset from a GitHub release
-ninman install-release owner repo --asset-pattern "{rid}-{version}"
-
-# Install from a local .csproj file or current directory
-ninman install
 ninman install ./src/MyApp/MyApp.csproj
-ninman install ./dist/MyApp-v1.2.0
-
-# Install directly from GitHub / Git repository
-ninman install https://github.com/owner/repo.git
-ninman install owner/repo
-ninman install owner/repo@v1.2.0
-
-# Multi-project repositories: select a specific project via subpath or --project
-ninman install https://github.com/owner/repo.git --project src/CliApp/CliApp.csproj
-ninman install https://github.com/owner/repo/tree/main/src/CliApp
-ninman install owner/repo#src/CliApp
-
-# Install as self-contained with version pruning
-ninman install --self-contained --versions-to-keep 3
-
-# Force installation / reinstallation of older version
-ninman install --force --app-version 1.0.0
-```
-
-### Application Maintenance
-
-```bash
-# Upgrade an application or all tracked applications
-ninman upgrade myapp
-ninman upgrade --all
-
-# Rollback to the previous version
-ninman rollback --previous myapp
-
-# Rollback to a specific version
-ninman rollback --target-version 1.1.0 myapp
-
-# Uninstall a specific version or everything
-ninman uninstall --target-version 1.0.0 myapp
-ninman uninstall --all
-```
-
-### Installation Status
-
-```bash
-# List all tracked applications managed by ninman
 ninman list-apps
-
-# Describe the installation details of a given application
-ninman app-details myapp
-
-# List installed versions of a given application
-ninman list-versions myapp
+ninman upgrade myapp
+ninman rollback myapp 1.1.0
 ```
 
-GitHub release installations discover `ninman.yml`, `ninman.yaml`, or a `.csproj` from the
-unpacked release asset. Private repositories can use `NINMAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or
-`GH_TOKEN`; tokens are used for requests only and are not stored in the application registry.
-
-## Configuration (`ninman.yaml`)
-
-```yaml
-app_directory: my-app
-binary_name: myapp
-source_binary_name: MyApp.dll # or MyApp.exe
-csproj_path: src/MyApp/MyApp.csproj # optional
-```
+See the [installation guide](https://tcfoss.github.io/net-install-manager/installing/) for source formats and manifests, and the [maintenance guide](https://tcfoss.github.io/net-install-manager/maintaining/) for version management and uninstalling.

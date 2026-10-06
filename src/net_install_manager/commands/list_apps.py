@@ -1,37 +1,35 @@
-"""List apps command to show all tracked applications managed by ninman."""
+"""Command to list installed applications."""
 
 import argparse
-from net_install_manager.cli_output import write
-from net_install_manager.registry import AppRegistry
-from net_install_manager.runtime_config import RuntimeInfo
+from dataclasses import dataclass
+
+from net_install_manager.commands.base_command import BaseCommand
+from net_install_manager.core.registry import Registry
+from net_install_manager.runtime.runtime import Runtime
 
 
-def execute(
-    args: argparse.Namespace,
-    registry: AppRegistry | None = None,
-    runtime: RuntimeInfo | None = None,
-) -> int:
-    """Execute the list-apps command."""
-    runtime = runtime or RuntimeInfo.current(system_wide=getattr(args, "system", False))
-    registry = registry or AppRegistry(runtime=runtime)
-    apps = registry.load()
-
-    if not apps:
-        write("No applications currently tracked by ninman.")
-        return 0
-
-    write(f"Tracked applications ({'system-wide' if args.system else 'user'}):")
-    for name, app in sorted(apps.items()):
-        ver_str = f" (v{app.installed_version})" if app.installed_version else ""
-        write(f"  - {name}{ver_str}: {app.source_path}")
-
-    return 0
+@dataclass
+class ListAppsArgs:
+    """Arguments for the ListAppsCommand."""
 
 
-def register_list_apps_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
-    """Register the list-apps command arguments."""
-    parser = subparsers.add_parser("list-apps", help="List all applications tracked by ninman")
-    return parser
+class ListAppsCommand(BaseCommand[ListAppsArgs]):
+    """Command to list installed applications."""
 
+    def execute(self, runtime: Runtime, args: ListAppsArgs):
+        """Execute the command to list installed applications."""
+        registry = Registry(runtime)
 
-__all__ = ["execute", "register_list_apps_command"]
+        for app in registry.get_installed_apps():
+            print(f"{app[0]} ({app[1]})")
+
+    @staticmethod
+    def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+        """Register the list apps command with the argument parser."""
+        parser = subparsers.add_parser("list-apps", help="List installed applications")
+        return parser
+
+    @staticmethod
+    def parse_arguments(runtime: Runtime, args: argparse.Namespace) -> ListAppsArgs:
+        """Parse the command-line arguments into a ListAppsArgs instance."""
+        return ListAppsArgs()

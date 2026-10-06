@@ -32,6 +32,7 @@ def run_command(
     output: CommandOutput = CommandOutput.STREAM,
 ) -> CommandResult:
     """Run a shell command with the requested output handling mode."""
+
     logger.debug("Executing command <%s> in <%s>", " ".join(command), cwd or ".")
 
     capture_output = output in (CommandOutput.CAPTURE, CommandOutput.QUIET)
@@ -64,11 +65,11 @@ def run_command(
 def exec_command(
     command: list[str],
     cwd: str | None = None,
-    quiet: bool = False,
     output: CommandOutput | None = None,
 ) -> None:
     """Execute a shell command in the specified working directory."""
-    output_mode = output or (CommandOutput.QUIET if quiet else CommandOutput.STREAM)
+    output_mode = output or CommandOutput.STREAM
+
     if output_mode is CommandOutput.STREAM:
         logger.info("Executing command <%s> in <%s>", " ".join(command), cwd or ".")
 
@@ -81,4 +82,10 @@ def exec_command_output(command: list[str], cwd: str | None = None) -> str:
     return result.stdout
 
 
-__all__ = ["CommandOutput", "CommandResult", "exec_command", "exec_command_output", "run_command"]
+__all__ = [
+    "CommandOutput",
+    "CommandResult",
+    "exec_command",
+    "exec_command_output",
+    "run_command",
+]
