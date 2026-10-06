@@ -50,24 +50,36 @@ def test_resolve_manifest_handles_missing_and_duplicate_source_directories(tmp_p
     assert resolve_manifest(None, dist_dir, dist_dir) is None
 
 
-@pytest.mark.parametrize(
-    ("requested", "expected_target"),
-    [
-        (TargetOptions(), "binary_name"),
-        (TargetOptions(binary_name="demo"), "source_binary_name"),
-        (
-            TargetOptions(binary_name="demo", source_binary_name="Demo"),
-            "app_dir_name",
-        ),
-    ],
-)
-def test_resolve_targets_requires_all_names(tmp_path, requested, expected_target):
+@pytest.mark.parametrize("requested", [TargetOptions(), TargetOptions(binary_name="demo")])
+def test_resolve_targets_requires_source_binary_name(tmp_path, requested):
     service = InstallationService(_runtime(tmp_path))
 
     with pytest.raises(errors.UnresolvedTargetError) as exc_info:
         service._resolve_targets(requested, None, None)
 
-    assert exc_info.value.target_name == expected_target
+    assert exc_info.value.target_name == "source_binary_name"
+
+
+@pytest.mark.parametrize(
+    ("source_binary_name", "expected_binary_name"),
+    [
+        ("MyApp.dll", "myapp"),
+        ("MyApp.exe", "myapp"),
+        ("Company.Product.CliApp", "company-product-cliapp"),
+    ],
+)
+def test_resolve_targets_derives_binary_and_app_dir_names(
+    tmp_path, source_binary_name, expected_binary_name
+):
+    service = InstallationService(_runtime(tmp_path))
+
+    targets = service._resolve_targets(
+        TargetOptions(source_binary_name=source_binary_name), None, None
+    )
+
+    assert targets == ResolvedTargets(
+        expected_binary_name, source_binary_name, expected_binary_name
+    )
 
 
 def test_resolve_targets_infers_project_names_and_applies_requested_override(
@@ -275,6 +287,7 @@ def test_install_applies_requested_target_permissions(tmp_path):
     runtime = _runtime(tmp_path)
     build_dir = tmp_path / "build"
     build_dir.mkdir()
+    (build_dir / "Demo.dll").write_text("binary", encoding="utf-8")
     calls = {}
     request = InstallationRequest(
         app_source=app_sources.BuiltAppSource(build_dir),
@@ -293,3 +306,32 @@ def test_install_applies_requested_target_permissions(tmp_path):
     ).install(request)
 
     assert calls["set_permissions"] == (result.paths.versions_dir / "2.0.0", 0o755)
+    assert result.app.source_binary_name == "Demo.dll"
+
+
+def test_find_source_binary_appends_exe_extension(tmp_path):
+    executable = tmp_path / "Demo.exe"
+    executable.write_text("binary", encoding="utf-8")
+    targets = ResolvedTargets("demo", "Demo", "Demo")
+
+    resolved = InstallationService._find_source_binary(tmp_path, targets)
+
+    assert resolved == ResolvedTargets("demo", "Demo.exe", "Demo")
+
+
+@pytest.mark.parametrize(
+    ("stored_name", "artifact_name", "resolved_name"),
+    [
+        ("Demo.exe", "Demo.dll", "Demo.dll"),
+        ("Demo.dll", "Demo", "Demo"),
+    ],
+)
+def test_find_source_binary_resolves_changed_artifact_suffix(
+    tmp_path, stored_name, artifact_name, resolved_name
+):
+    (tmp_path / artifact_name).write_text("binary", encoding="utf-8")
+    targets = ResolvedTargets("demo", stored_name, "Demo")
+
+    resolved = InstallationService._find_source_binary(tmp_path, targets)
+
+    assert resolved == ResolvedTargets("demo", resolved_name, "Demo")

@@ -188,6 +188,7 @@ def test_prepare_source_resolves_git_project_path(
 def test_install_registers_app_for_future_commands(tmp_path):
     build_dir = tmp_path / "build"
     build_dir.mkdir()
+    (build_dir / "App").write_text("binary", encoding="utf-8")
     _write_manifest(build_dir, "ninman.yml", "manifest-app")
     runtime = replace(
         Runtime.current(),
@@ -250,6 +251,7 @@ def test_upgrade_updates_registered_release_and_uses_source_binary(tmp_path):
     registry.set(app.binary_name, app)
     build_dir = tmp_path / "build"
     build_dir.mkdir()
+    (build_dir / "ActualBinary.dll").write_text("binary", encoding="utf-8")
     calls = {}
 
     request = UpgradeRequest(
@@ -271,11 +273,12 @@ def test_upgrade_updates_registered_release_and_uses_source_binary(tmp_path):
     assert registered is not None
     assert registered == result.app
     assert registered.installed_version == semver.Version(2, 0, 0)
+    assert registered.source_binary_name == "ActualBinary.dll"
     assert isinstance(registered.app_source, app_sources.GitHubReleaseAppSource)
     assert registered.app_source.tag == "v2"
     assert calls["prepare_and_build"][0].tag == "v2"
-    assert calls["make_executable"] == result.paths.versions_dir / "2.0.0" / "ActualBinary"
-    assert calls["create_bin_launcher"][2] == result.paths.current_dir / "ActualBinary"
+    assert calls["make_executable"] == result.paths.versions_dir / "2.0.0" / "ActualBinary.dll"
+    assert calls["create_bin_launcher"][2] == result.paths.current_dir / "ActualBinary.dll"
     assert calls["set_permissions"][1] == 0
 
 
@@ -317,6 +320,7 @@ def test_upgrade_preserves_or_clears_source_pin(tmp_path, source_kind, clear_pin
     registry.set(app.binary_name, app)
     build_dir = tmp_path / "build"
     build_dir.mkdir()
+    (build_dir / "ActualBinary").write_text("binary", encoding="utf-8")
     calls = {}
 
     result = InstallationService(

@@ -173,6 +173,7 @@ class InstallationService:
                 prepared.project_path.parent if prepared.project_path else None,
             )
             targets = self._resolve_targets(request.targets, manifest, prepared.project_path)
+            targets = self._find_source_binary(prepared.directory, targets)
             version = self._resolve_version(
                 prepared, targets, request.installation_options.version_override
             )
@@ -240,6 +241,7 @@ class InstallationService:
                 source_binary_name=app.source_binary_name,
                 app_dir_name=app.lib_dir.name,
             )
+            targets = self._find_source_binary(prepared.directory, targets)
             version = self._resolve_version(
                 prepared, targets, request.upgrade_options.version_override
             )
@@ -248,7 +250,7 @@ class InstallationService:
             paths = get_paths_from_app_info(self._runtime, app)
             version_dir = paths.versions_dir / str(version)
             self._os_ops.mirror_directory(prepared.directory, version_dir, app.exclude_patterns)
-            self._os_ops.make_executable(version_dir / app.source_binary_name)
+            self._os_ops.make_executable(version_dir / targets.source_binary_name)
             if app.target_permissions is not None:
                 self._os_ops.set_permissions(version_dir, app.target_permissions)
 
@@ -257,10 +259,14 @@ class InstallationService:
             self._os_ops.create_bin_launcher(
                 paths.bin_dir,
                 app.binary_name,
-                paths.current_dir / app.source_binary_name,
+                paths.current_dir / targets.source_binary_name,
             )
 
-            app = replace(app, installed_version=version)
+            app = replace(
+                app,
+                installed_version=version,
+                source_binary_name=targets.source_binary_name,
+            )
             self._registry.set(app.binary_name, app)
 
             return UpgradeResult(app=app, paths=paths)
@@ -275,7 +281,7 @@ class InstallationService:
         if project_path:
             assembly_name = cs_utils.get_assembly_name_from_csproj(project_path)
             inferred = TargetOptions(
-                binary_name=assembly_name.lower().replace(".", "-"),
+                binary_name=self._normalize_binary_name(assembly_name),
                 source_binary_name=assembly_name,
                 app_dir_name=assembly_name,
             )
@@ -292,12 +298,12 @@ class InstallationService:
         )
         app_dir_name = app_dir_name or (inferred.app_dir_name if inferred else None)
 
-        if not binary_name:
-            raise errors.UnresolvedTargetError("binary_name")
         if not source_binary_name:
             raise errors.UnresolvedTargetError("source_binary_name")
+        if not binary_name:
+            binary_name = self._normalize_binary_name(source_binary_name)
         if not app_dir_name:
-            raise errors.UnresolvedTargetError("app_dir_name")
+            app_dir_name = binary_name
 
         return ResolvedTargets(binary_name, source_binary_name, app_dir_name)
 
@@ -368,3 +374,40 @@ class InstallationService:
             app_name,
             registered_app.lib_dir,
         )
+
+    @staticmethod
+    def _normalize_binary_name(binary_name: str) -> str:
+        """Normalize the binary name by lowercasing and replacing dots with hyphens."""
+        binary_name = binary_name.lower()
+        if binary_name.endswith(".exe") or binary_name.endswith(".dll"):
+            binary_name = binary_name.rsplit(".", 1)[0]
+        return binary_name.lower().replace(".", "-")
+
+    @staticmethod
+    def _find_source_binary(working_dir: Path, targets: ResolvedTargets) -> ResolvedTargets:
+        """Find the source binary in the working directory, appending .exe or .dll if necessary."""
+
+        bin_path = working_dir / targets.source_binary_name
+        if bin_path.exists() and bin_path.is_file():
+            return targets
+
+        binary_name = targets.source_binary_name
+        if binary_name.lower().endswith(".exe") or binary_name.lower().endswith(".dll"):
+            binary_name = binary_name.rsplit(".", 1)[0]
+
+        bin_path = working_dir / binary_name
+        if bin_path.exists() and bin_path.is_file():
+            targets = replace(targets, source_binary_name=binary_name)
+            return targets
+
+        bin_path = working_dir / f"{binary_name}.exe"
+        if bin_path.exists() and bin_path.is_file():
+            targets = replace(targets, source_binary_name=f"{binary_name}.exe")
+            return targets
+
+        bin_path = working_dir / f"{binary_name}.dll"
+        if bin_path.exists() and bin_path.is_file():
+            targets = replace(targets, source_binary_name=f"{binary_name}.dll")
+            return targets
+
+        raise errors.ExecutableNotFoundError(targets.source_binary_name, working_dir)

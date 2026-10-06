@@ -37,6 +37,30 @@ def test_prepare_source_returns_local_source_unchanged(tmp_path):
     assert prepared is source
 
 
+def test_prepare_source_finds_nested_project_for_git_source(monkeypatch, tmp_path):
+    cache_dir = tmp_path / "checkout"
+    project = cache_dir / "src" / "App" / "App.csproj"
+    project.parent.mkdir(parents=True)
+    project.write_text("<Project></Project>", encoding="utf-8")
+    source = app_sources.GitCodeAppSource(
+        "https://example.com/source.git",
+        None,
+        Path("/dev/null"),
+        BuildOptions(),
+        cache_dir,
+    )
+    monkeypatch.setattr(artifact_provider.git_utils, "clone_or_update_repo", lambda _: None)
+
+    prepared = artifact_provider.DefaultArtifactProvider().prepare_source(
+        source, Runtime.current(), tmp_path / "work"
+    )
+
+    assert isinstance(prepared, app_sources.GitCodeAppSource)
+
+    assert prepared.subpath == Path("src/App/App.csproj")
+    assert prepared.project_path == project
+
+
 def test_prepare_source_rejects_git_project_outside_cache(monkeypatch, tmp_path):
     cache_dir = tmp_path / "checkout"
     cache_dir.mkdir()

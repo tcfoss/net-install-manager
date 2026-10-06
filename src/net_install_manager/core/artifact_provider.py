@@ -67,7 +67,7 @@ class DefaultArtifactProvider:
                 git_utils.clone_or_update_repo(git_source)
                 cache_dir = git_source.cache_dir.resolve()
                 if git_source.subpath == Path("/dev/null"):
-                    project_path = cs_utils.find_project_file(cache_dir)
+                    project_path = cs_utils.find_nested_project_file(cache_dir)
                     if project_path is None:
                         raise errors.InvalidSourceError(cache_dir)
                 else:

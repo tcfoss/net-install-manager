@@ -88,6 +88,39 @@ def test_find_project_file_multiple_csproj_in_directory_throws(tmp_path):
         csproj.find_project_file(tmp_path)
 
 
+def test_find_nested_project_file_finds_single_nested_project(tmp_path):
+    project = tmp_path / "src" / "Sample" / "Sample.csproj"
+    project.parent.mkdir(parents=True)
+    project.write_text("<Project></Project>", encoding="utf-8")
+
+    assert csproj.find_nested_project_file(tmp_path) == project
+
+
+def test_find_nested_project_file_prefers_non_test_project(tmp_path):
+    app_project = tmp_path / "src" / "App" / "App.csproj"
+    test_project = tmp_path / "tests" / "App.Tests" / "App.Tests.csproj"
+    app_project.parent.mkdir(parents=True)
+    test_project.parent.mkdir(parents=True)
+    app_project.write_text("<Project></Project>", encoding="utf-8")
+    test_project.write_text("<Project></Project>", encoding="utf-8")
+
+    assert csproj.find_nested_project_file(tmp_path) == app_project
+
+
+def test_find_nested_project_file_raises_for_multiple_non_test_projects(tmp_path):
+    project_one = tmp_path / "src" / "One" / "One.csproj"
+    project_two = tmp_path / "src" / "Two" / "Two.csproj"
+    project_one.parent.mkdir(parents=True)
+    project_two.parent.mkdir(parents=True)
+    project_one.write_text("<Project></Project>", encoding="utf-8")
+    project_two.write_text("<Project></Project>", encoding="utf-8")
+
+    with pytest.raises(errors.MultipleCsprojFilesError) as exc_info:
+        csproj.find_nested_project_file(tmp_path)
+
+    assert set(exc_info.value.csproj_files) == {project_one, project_two}
+
+
 @pytest.mark.parametrize(
     ("xml", "expected"),
     [

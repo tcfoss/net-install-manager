@@ -1,7 +1,9 @@
 # Installed Application Maintenance
+
 Applications installed by `ninman` are tracked in a local registry. The commands below take the application name shown by `list-apps`.
 
-## Listing Applications and Their Versions
+
+## Listing Applications
 
 List all tracked applications:
 
@@ -18,6 +20,7 @@ ninman list-versions my-app --reverse
 
 Use `ninman app-details my-app` to inspect its install path, current version, and original source.
 
+
 ## Upgrading Applications
 
 Upgrade a tracked application from its recorded source:
@@ -32,6 +35,7 @@ For a Git source, `--new-ref` selects a different ref for the upgrade. For a Git
 ninman upgrade my-app --new-ref main
 ninman upgrade my-app --new-release-tag v2.0.0
 ```
+
 
 ## Removing Versions of an Application
 
@@ -54,6 +58,7 @@ ninman prune my-app --min-version 1.2.0 --max-version 2.0.0
 ```
 
 If pruning removes the current version, `ninman` asks before switching to the newest version that remains. Pass `--yes` (or `-y`) to confirm automatically. The command will not remove every installed version.
+
 
 ## Uninstalling an Application Completely
 

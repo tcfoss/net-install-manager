@@ -1,5 +1,6 @@
 """Utilities for working with C# projects."""
 
+import logging
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -8,6 +9,8 @@ import semver
 from net_install_manager.core import errors
 from net_install_manager.utilities.sh import exec_command
 from net_install_manager.config.build_options import BuildOptions
+
+logger = logging.getLogger(__name__)
 
 
 def get_property_from_csproj(csproj_path: Path, property_name: str) -> str | None:
@@ -63,6 +66,47 @@ def find_project_file(search_path: Path) -> Path | None:
     if len(project_files) > 1:
         raise errors.MultipleCsprojFilesError(search_path, project_files)
     return project_files[0] if project_files else None
+
+
+def find_nested_project_file(search_path: Path) -> Path | None:
+    """Recursively search for a .csproj file in a directory and its subdirectories."""
+
+    logger.debug("Searching for nested project file in: %s", search_path)
+    project_file = find_project_file(search_path)
+    if project_file:
+        return project_file
+
+    candidates: list[Path] = []
+    for subdir in search_path.iterdir():
+        if not subdir.is_dir():
+            continue
+
+        if project_file := find_nested_project_file(subdir):
+            candidates.append(project_file)
+
+    if not candidates:
+        logger.debug("No nested project files found in: %s", search_path)
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    logger.debug(
+        "Multiple nested projects found in: %s; excluding projects with 'test' in their name.",
+        search_path,
+    )
+
+    original_candidates = list(candidates)
+    for candidate in original_candidates:
+        if "test" in candidate.name.lower():
+            candidates.remove(candidate)
+
+    if not candidates:
+        logger.debug("No suitable nested project files found in: %s", search_path)
+        return None
+
+    if len(candidates) > 1:
+        raise errors.MultipleCsprojFilesError(search_path, candidates)
+    return candidates[0] if candidates else None
 
 
 def publish(

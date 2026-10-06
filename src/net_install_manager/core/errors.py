@@ -103,6 +103,15 @@ class InvalidSourceError(BaseNinmanError):
         self.source = source
 
 
+class ExecutableNotFoundError(BaseNinmanError):
+    """Raised when the expected executable is not found."""
+
+    def __init__(self, executable_name: str, search_path: str | Path):
+        super().__init__(f"Executable '{executable_name}' not found in '{search_path}'.")
+        self.executable_name = executable_name
+        self.search_path = search_path
+
+
 class UnresolvedTargetError(BaseNinmanError):
     """Raised when a target cannot be resolved."""
 

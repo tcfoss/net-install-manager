@@ -2,11 +2,19 @@
 
 ## Application Names
 
-The names you choose determine both the installed files and the command users run. `binary_name` is the launcher command, `source_binary_name` is the executable or DLL in the artifact, and `app_dir_name` is the installation directory name.
+Every installation resolves three names:
+1. The source binary name, which is the actual executable file in the compiled artifact. (CLI flag: `--source-binary-name`)
+2. The binary name, which is the command users run to launch the application. (CLI flag: `--binary-name`)
+3. The application directory name, which is the name of the installation directory. (CLI flag: `--app-dir-name`)
 
-For .NET projects, `ninman` derives all three from the assembly name. It lowercases the launcher name and replaces dots with dashes, so an assembly named `Company.Product.CliApp` produces the command `company-product-cliapp`. Set `--binary-name` to choose a shorter or more convenient command, such as `dbman` or `myapp`.
+You can specify or override each name with its CLI flag. When the source provides enough information, `ninman` infers defaults for names you omit.
 
-Prebuilt directories and GitHub release assets have no project metadata to infer these names from. Unless the artifact contains a manifest, provide all three options:
+For .NET source projects (either local or from Git), `ninman` derives all three defaults from the assembly name:
+1. For the source binary name, it uses the `AssemblyName` property from the `.csproj`, falling back to `PackageId` and then the project filename stem.
+2. It constructs the binary name from the source binary name by first stripping the file extension, lowercasing the launcher name and then replacing dots with dashes, so an assembly named `Company.Product.CliApp` produces the command `company-product-cliapp`.
+3. It uses the project assembly name as the application directory name.
+
+Prebuilt directories and GitHub release assets have no project metadata from which to infer the source binary name. Unless the artifact contains a [manifest](#manifest), provide `--source-binary-name`. If omitted, `--binary-name` defaults to that name with `.dll`/`.exe` removed, converted to lowercase, and dots replaced with dashes; `app_dir_name` defaults to the resulting binary name. You can still set all three explicitly:
 
 ```bash
 ninman install ./dist/MyApp \
@@ -45,7 +53,7 @@ The app name and source binary are inferred from the project assembly name. For 
 
 Use `owner:repo` to select the latest release, or `owner:repo:tag` to select a specific release. `ninman` needs to select a single release asset to download. If a release contains multiple assets, supply `--asset-pattern` to narrow the selection; it is a regular expression matched against asset names. The default pattern is `{rid}-{version}`. `{rid}`, `{os}`, `{arch}`, and `{version}` are substituted before matching, and exactly one asset must match. If the release has exactly one asset, you can use `--asset-pattern '.*'` to match it.
 
-If the release archive does not contain a manifest, pass the three naming options shown above. For example, when the release has exactly one asset:
+If the release archive does not contain a manifest, set `--source-binary-name` so `ninman` can find the executable or DLL in the artifact. The launcher and directory names are derived from it unless you override them. For example, when the release has exactly one asset:
 
 ```bash
 ninman install octocat:my-app \
