@@ -1,5 +1,7 @@
 """Update the registry format to version 0.2.0."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import logging
 from pathlib import Path
