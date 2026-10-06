@@ -1,71 +1,61 @@
-"""Uninstall command for the Net Install Manager application."""
+"""Command to uninstall an application."""
 
 import argparse
-from net_install_manager.cli_output import error, write
-from net_install_manager.runtime_config import RuntimeInfo
-from net_install_manager.app_manager import AppManager, AppManagerError
-from net_install_manager.utilities.resolve_manager import resolve_manager
-from net_install_manager.registry import AppRegistry
+from dataclasses import dataclass
+import logging
+
+from net_install_manager.commands.base_command import BaseCommand
+from net_install_manager.commands.helpers import interaction
+from net_install_manager.config.paths import get_paths_from_app_info
+from net_install_manager.core import errors
+from net_install_manager.core.os_ops import get_os_ops
+from net_install_manager.core.registry import Registry
+from net_install_manager.runtime.runtime import Runtime
+
+logger = logging.getLogger(__name__)
 
 
-def execute(
-    args: argparse.Namespace,
-    manager: AppManager | None = None,
-    registry: AppRegistry | None = None,
-    runtime: RuntimeInfo | None = None,
-) -> int:
-    """Execute the uninstall command."""
-    if not validate_arguments(args):
-        error("Please specify either --target-version or --all to uninstall.")
-        return 1
+@dataclass(frozen=True)
+class UninstallArguments:
+    """Arguments for the uninstall command."""
 
-    runtime = runtime or RuntimeInfo.current()
-    manager = resolve_manager(args, runtime, manager, registry, app_manager_cls=AppManager)
+    app_name: str
+    assume_yes: bool = False
 
-    try:
-        manager.uninstall(
-            target_version=args.target_version,
-            all_versions=args.all,
+
+class UninstallCommand(BaseCommand[UninstallArguments]):
+    """Command to uninstall an application."""
+
+    def execute(self, runtime: Runtime, args: UninstallArguments) -> None:
+
+        if not args.assume_yes and not interaction.confirm(
+            f"Are you sure you want to uninstall the application '{args.app_name}'?"
+        ):
+            logger.info("Uninstallation of '%s' cancelled by user.", args.app_name)
+            return
+
+        registry = Registry(runtime)
+        app_info = registry.get(args.app_name)
+        if app_info is None:
+            raise errors.AppNotRegisteredError(args.app_name, runtime.registry_path)
+
+        paths = get_paths_from_app_info(runtime, app_info)
+        logger.info("Removing installed files for application '%s'.", args.app_name)
+        get_os_ops(runtime.os).remove_application(paths)
+
+        registry.remove(app_info.binary_name)
+        logger.info("Application '%s' uninstalled successfully.", args.app_name)
+
+    @staticmethod
+    def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+        parser = subparsers.add_parser("uninstall", help="Uninstall an application.")
+        parser.add_argument("app_name", type=str, help="Name of the application to uninstall.")
+        interaction.register_autoconfirm_argument(parser)
+        return parser
+
+    @staticmethod
+    def parse_arguments(runtime: Runtime, args: argparse.Namespace) -> UninstallArguments:
+        return UninstallArguments(
+            app_name=args.app_name,
+            assume_yes=args.assume_yes,
         )
-        if args.all:
-            write(f"Successfully uninstalled all versions of '{manager.config.binary_name}'.")
-        else:
-            write(
-                f"Successfully uninstalled version {args.target_version}"
-                f" of '{manager.config.binary_name}'."
-            )
-        return 0
-    except AppManagerError as e:
-        error(f"Uninstall failed: {e}")
-        return 1
-
-
-def validate_arguments(args: argparse.Namespace) -> bool:
-    """Validate the arguments for the uninstall command."""
-    if getattr(args, "target_version", None) or getattr(args, "all", False):
-        return True
-    return False
-
-
-def register_uninstall_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
-    """Register the uninstall command arguments."""
-    # pylint: disable=duplicate-code
-
-    parser = subparsers.add_parser("uninstall", help="Uninstall a .NET application")
-    parser.add_argument(
-        "app_name",
-        nargs="?",
-        default=None,
-        help=(
-            "Name of the tracked application to uninstall "
-            "(optional if running in project directory)"
-        ),
-    )
-    parser.add_argument("-t", "--target-version", help="The target version to uninstall")
-    parser.add_argument(
-        "-a", "--all", action="store_true", help="Uninstall all versions of the application"
-    )
-    return parser
-
-
-__all__ = ["execute", "register_uninstall_command", "validate_arguments"]

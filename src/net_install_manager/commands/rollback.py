@@ -1,59 +1,81 @@
-"""Rollback command for the Net Install Manager application."""
+"""Command to change the current version of an installed application."""
 
+from argparse import _SubParsersAction, ArgumentParser, Namespace
 import argparse
-from net_install_manager.cli_output import error, write
-from net_install_manager.runtime_config import RuntimeInfo
-from net_install_manager.app_manager import AppManager, AppManagerError
-from net_install_manager.utilities.resolve_manager import resolve_manager
-from net_install_manager.registry import AppRegistry
+from dataclasses import dataclass, replace
+import logging
+import semver
+
+from net_install_manager.commands.base_command import BaseCommand
+from net_install_manager.config.paths import get_paths_from_app_info
+from net_install_manager.core import errors
+from net_install_manager.core.os_ops import get_os_ops
+from net_install_manager.core.registry import Registry
+from net_install_manager.runtime.runtime import Runtime
+from net_install_manager.utilities.version import parse_semver
+
+logger = logging.getLogger(__name__)
 
 
-def execute(
-    args: argparse.Namespace,
-    manager: AppManager | None = None,
-    registry: AppRegistry | None = None,
-    runtime: RuntimeInfo | None = None,
-) -> int:
-    """Execute the rollback command."""
-    runtime = runtime or RuntimeInfo.current()
-    manager = resolve_manager(args, runtime, manager, registry, app_manager_cls=AppManager)
+@dataclass
+class RollbackArguments:
+    """Arguments for the rollback command."""
 
-    try:
-        rolled_back_version = manager.rollback(
-            target_version=args.target_version,
-            previous=args.previous,
+    app_name: str
+    target_version: semver.Version
+
+
+class RollbackCommand(BaseCommand[RollbackArguments]):
+    """Command to change the current version."""
+
+    def execute(self, runtime: Runtime, args: RollbackArguments) -> None:
+
+        registry = Registry(runtime)
+
+        app_info, installed_versions = registry.get_app_with_versions(args.app_name)
+
+        if args.target_version not in installed_versions.versions:
+            raise errors.VersionNotInstalledError(args.app_name, str(args.target_version))
+
+        if app_info.installed_version == args.target_version:
+            logger.info(
+                "Application %s is already at target version %s.",
+                args.app_name,
+                args.target_version,
+            )
+            return
+
+        paths = get_paths_from_app_info(runtime, app_info)
+        os_ops = get_os_ops(runtime.os)
+        logger.info(
+            "Updating current to point to version %s for application %s.",
+            args.target_version,
+            args.app_name,
         )
-        write(f"Successfully rolled back to version {rolled_back_version}.")
-        return 0
-    except AppManagerError as e:
-        error(f"Rollback failed: {e}")
-        return 1
 
+        os_ops.update_current_link(paths.versions_dir, str(args.target_version), paths.current_dir)
 
-def register_rollback_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
-    """Register the rollback command arguments."""
-    # pylint: disable=duplicate-code
+        app_info = replace(app_info, installed_version=args.target_version)
+        registry.set(app_info.binary_name, app_info)
 
-    parser = subparsers.add_parser(
-        "rollback", help="Rollback a .NET application to a previous installed version"
-    )
-    parser.add_argument(
-        "app_name",
-        nargs="?",
-        default=None,
-        help=(
-            "Name of the tracked application to roll back "
-            "(optional if running in project directory)"
-        ),
-    )
-    parser.add_argument("-t", "--target-version", help="The target version to rollback to")
-    parser.add_argument(
-        "-p",
-        "--previous",
-        action="store_true",
-        help="Roll back to the second-latest (or previous) version",
-    )
-    return parser
+    @staticmethod
+    def register_command(subparsers: _SubParsersAction) -> ArgumentParser:
+        parser = subparsers.add_parser(
+            "rollback", help="Rollback the application to a previous version."
+        )
+        parser.add_argument("app_name", type=str, help="Name of the application to rollback.")
+        parser.add_argument("target_version", type=str, help="Target version to rollback to.")
+        return parser
 
+    @staticmethod
+    def parse_arguments(runtime: Runtime, args: Namespace) -> RollbackArguments:
+        version = parse_semver(args.target_version)
+        assert version is not None
+        return RollbackArguments(app_name=args.app_name, target_version=version)
 
-__all__ = ["execute", "register_rollback_command"]
+    @staticmethod
+    def validate_arguments(
+        parser: argparse.ArgumentParser, runtime: Runtime, args: argparse.Namespace
+    ) -> None:
+        if parse_semver(args.target_version) is None:
+            parser.error(f"Invalid target version: {args.target_version}")
