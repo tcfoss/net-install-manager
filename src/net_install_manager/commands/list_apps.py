@@ -20,6 +20,7 @@ class ListAppsCommand(BaseCommand[ListAppsArgs]):
         """Execute the command to list installed applications."""
         registry = Registry(runtime)
 
+        print("Installed applications:")
         for app in registry.get_installed_apps():
             print(f"{app[0]} ({app[1]})")
 

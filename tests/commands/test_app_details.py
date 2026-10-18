@@ -33,30 +33,33 @@ def _runtime(tmp_path: Path) -> Runtime:
         (
             "local-code",
             [
-                "Source type: Local Code",
-                "Path:          /source/Sample.csproj",
+                "Source type:   Local Code",
+                f"Path:          {Path('/source/Sample.csproj')}",
                 "Debug mode:     True",
             ],
         ),
         (
             "built",
-            ["Source type: Built Artifact", "Path:          /artifacts/sample"],
+            [
+                "Source type:   Built Artifact",
+                f"Path:          {Path('/artifacts/sample')}",
+            ],
         ),
         (
             "git-code",
             [
                 "Source type: Git Code",
-                "Clone URL:    https://example.com/sample.git",
+                "Clone URL:   https://example.com/sample.git",
                 "Ref:         main",
-                "Subpath:     src/Sample.csproj",
-                "Cache dir:   /cache/sample",
+                f"Subpath:     {Path('src/Sample.csproj')}",
+                f"Cache dir:   {Path('/cache/sample')}",
                 "Self-contained: True",
             ],
         ),
         (
             "github-release",
             [
-                "Source type: GitHub Release",
+                "Source type:   GitHub Release",
                 "Owner:         example",
                 "Repo:          sample",
                 "Tag:           v1.2.3",

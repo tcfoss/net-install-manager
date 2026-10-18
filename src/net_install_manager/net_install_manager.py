@@ -53,7 +53,7 @@ def _register_global_arguments(parser: argparse.ArgumentParser):
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level",
-        default="INFO",
+        default=None,
     )
     parser.add_argument(
         "--log-file",
@@ -62,15 +62,19 @@ def _register_global_arguments(parser: argparse.ArgumentParser):
     )
 
 
-def _configure_logging(log_level: str, log_file: str | None):
+def _configure_logging(log_level: str | None, log_file: str | None):
     """Configure the logging settings."""
     if log_file:
         log_path = Path(log_file).expanduser().resolve()
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_file = str(log_path)
 
+    default_log_level = "INFO" if log_file else "WARNING"
+    if log_level is None:
+        log_level = default_log_level
+
     logging.basicConfig(
-        level=getattr(logging, log_level),
+        level=getattr(logging, log_level) or default_log_level,
         filename=log_file,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )

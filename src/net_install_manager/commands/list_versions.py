@@ -28,6 +28,7 @@ class ListVersionsCommand(BaseCommand[ListVersionsArgs]):
         if not versions:
             raise errors.AppNotRegisteredError(args.app_name, runtime.registry_path)
 
+        print(f"Installed versions for {args.app_name}:")
         for version in sorted(versions.versions, reverse=not args.reverse):
             current_label = " (current)" if version == versions.current else ""
             print(f" - {version}{current_label}")

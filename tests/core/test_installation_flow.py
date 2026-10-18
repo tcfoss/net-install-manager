@@ -1,4 +1,3 @@
-from dataclasses import replace
 import argparse
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from net_install_manager.commands.helpers import installation as installation_he
 from net_install_manager.config import app_sources
 from net_install_manager.config.app_info import AppInfo
 from net_install_manager.config.build_options import BuildOptions
+from net_install_manager.config.paths import get_paths
 from net_install_manager.core.installation_service import (
     DefaultArtifactProvider,
     InstallationOptions,
@@ -185,16 +185,11 @@ def test_prepare_source_resolves_git_project_path(
     assert prepared.subpath == project_subpath
 
 
-def test_install_registers_app_for_future_commands(tmp_path):
+def test_install_registers_app_for_future_commands(tmp_path, runtime):
     build_dir = tmp_path / "build"
     build_dir.mkdir()
     (build_dir / "App").write_text("binary", encoding="utf-8")
     _write_manifest(build_dir, "ninman.yml", "manifest-app")
-    runtime = replace(
-        Runtime.current(),
-        home_dir=tmp_path,
-        registry_path=tmp_path / "config" / "apps.yaml",
-    )
 
     class MyOpts(OpsOptions):
         def mirror_directory_assertions(self, data: dict):
@@ -224,23 +219,18 @@ def test_install_registers_app_for_future_commands(tmp_path):
     assert registered == AppInfo(
         binary_name="manifest-app",
         source_binary_name="App",
-        lib_dir=tmp_path / ".local" / "lib" / "App",
+        lib_dir=get_paths(runtime, "App", "manifest-app").lib_dir,
         installed_version=semver.Version(1, 2, 3),
         app_source=request.app_source,
     )
 
 
-def test_upgrade_updates_registered_release_and_uses_source_binary(tmp_path):
-    runtime = replace(
-        Runtime.current(),
-        home_dir=tmp_path,
-        registry_path=tmp_path / "config" / "apps.yaml",
-    )
+def test_upgrade_updates_registered_release_and_uses_source_binary(tmp_path, runtime):
     app_source = app_sources.GitHubReleaseAppSource("owner", "repo", "{rid}-{version}", "v1")
     app = AppInfo(
         binary_name="demo",
         source_binary_name="ActualBinary",
-        lib_dir=tmp_path / ".local" / "lib" / "DemoApp",
+        lib_dir=get_paths(runtime, "DemoApp", "demo").lib_dir,
         installed_version=semver.Version(1, 0, 0),
         app_source=app_source,
         target_permissions=0,
@@ -284,12 +274,7 @@ def test_upgrade_updates_registered_release_and_uses_source_binary(tmp_path):
 
 @pytest.mark.parametrize("source_kind", ["git", "release"])
 @pytest.mark.parametrize("clear_pin", [False, True])
-def test_upgrade_preserves_or_clears_source_pin(tmp_path, source_kind, clear_pin):
-    runtime = replace(
-        Runtime.current(),
-        home_dir=tmp_path,
-        registry_path=tmp_path / "config" / "apps.yaml",
-    )
+def test_upgrade_preserves_or_clears_source_pin(tmp_path, runtime, source_kind, clear_pin):
     if source_kind == "git":
         app_source = app_sources.GitCodeAppSource(
             "https://example.com/source.git",
@@ -311,7 +296,7 @@ def test_upgrade_preserves_or_clears_source_pin(tmp_path, source_kind, clear_pin
     app = AppInfo(
         binary_name="demo",
         source_binary_name="ActualBinary",
-        lib_dir=tmp_path / ".local" / "lib" / "DemoApp",
+        lib_dir=get_paths(runtime, "DemoApp", "demo").lib_dir,
         installed_version=semver.Version(1, 0, 0),
         app_source=app_source,
     )

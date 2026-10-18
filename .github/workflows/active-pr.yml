@@ -36,8 +36,12 @@ jobs:
         run: poetry run pylint src
 
   unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     permissions:
       contents: read
 
@@ -50,14 +54,15 @@ jobs:
         run: poetry run pytest --cov=net_install_manager --cov-report=xml:TestResults/coverage.cobertura.xml
 
       - name: Normalize coverage reports
+        shell: bash
         run: |
           mkdir -p CoverageResults
-          cp TestResults/coverage.cobertura.xml CoverageResults/coverage-unit-1.cobertura.xml
+          cp TestResults/coverage.cobertura.xml CoverageResults/coverage-unit-${{ matrix.os }}.cobertura.xml
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-unit
+          name: coverage-unit-${{ matrix.os }}
           path: CoverageResults/*.cobertura.xml
 
   today:

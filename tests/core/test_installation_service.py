@@ -1,4 +1,3 @@
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -7,6 +6,7 @@ import semver
 from net_install_manager.config import app_sources
 from net_install_manager.config.app_info import AppInfo
 from net_install_manager.config.build_options import BuildOptions
+from net_install_manager.config.paths import get_paths
 from net_install_manager.core import errors
 from net_install_manager.core.artifact_provider import PreparedArtifact
 from net_install_manager.core.installation_service import (
@@ -25,21 +25,13 @@ from tests.shared_fixtures.artifact_provider_fixtures import get_test_artifact_p
 from tests.shared_fixtures.os_ops_fixtures import get_test_os_ops
 
 
-def _runtime(tmp_path: Path) -> Runtime:
-    return replace(
-        Runtime.current(),
-        home_dir=tmp_path,
-        registry_path=tmp_path / "config" / "apps.yaml",
-    )
-
-
-def _app(tmp_path: Path, source: app_sources.AppSource | None = None) -> AppInfo:
+def _app(runtime: Runtime, source: app_sources.AppSource | None = None) -> AppInfo:
     return AppInfo(
         binary_name="demo",
         source_binary_name="Demo",
-        lib_dir=tmp_path / ".local" / "lib" / "DemoApp",
+        lib_dir=get_paths(runtime, "DemoApp", "demo").lib_dir,
         installed_version=semver.Version(1, 0, 0),
-        app_source=source or app_sources.BuiltAppSource(tmp_path / "build"),
+        app_source=source or app_sources.BuiltAppSource(runtime.home_dir / "build"),
     )
 
 
@@ -51,8 +43,8 @@ def test_resolve_manifest_handles_missing_and_duplicate_source_directories(tmp_p
 
 
 @pytest.mark.parametrize("requested", [TargetOptions(), TargetOptions(binary_name="demo")])
-def test_resolve_targets_requires_source_binary_name(tmp_path, requested):
-    service = InstallationService(_runtime(tmp_path))
+def test_resolve_targets_requires_source_binary_name(runtime, requested):
+    service = InstallationService(runtime)
 
     with pytest.raises(errors.UnresolvedTargetError) as exc_info:
         service._resolve_targets(requested, None, None)
@@ -69,9 +61,9 @@ def test_resolve_targets_requires_source_binary_name(tmp_path, requested):
     ],
 )
 def test_resolve_targets_derives_binary_and_app_dir_names(
-    tmp_path, source_binary_name, expected_binary_name
+    runtime, source_binary_name, expected_binary_name
 ):
-    service = InstallationService(_runtime(tmp_path))
+    service = InstallationService(runtime)
 
     targets = service._resolve_targets(
         TargetOptions(source_binary_name=source_binary_name), None, None
@@ -83,9 +75,9 @@ def test_resolve_targets_derives_binary_and_app_dir_names(
 
 
 def test_resolve_targets_infers_project_names_and_applies_requested_override(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, runtime
 ):
-    service = InstallationService(_runtime(tmp_path))
+    service = InstallationService(runtime)
     project_path = tmp_path / "Demo.Tools.csproj"
     monkeypatch.setattr(
         "net_install_manager.core.installation_service.cs_utils.get_assembly_name_from_csproj",
@@ -198,10 +190,10 @@ def test_resolve_version_raises_when_no_version_can_be_determined(monkeypatch, t
     ],
 )
 def test_apply_upgrade_modifications_preserves_or_updates_source(
-    tmp_path, source, options, expected_source, expected_build_options
+    runtime, source, options, expected_source, expected_build_options
 ):
-    service = InstallationService(_runtime(tmp_path))
-    app = _app(tmp_path, source)
+    service = InstallationService(runtime)
+    app = _app(runtime, source)
 
     updated_app, build_options = service._apply_upgrade_modifications_get_build_options(
         app, UpgradeRequest("demo", options)
@@ -211,16 +203,15 @@ def test_apply_upgrade_modifications_preserves_or_updates_source(
     assert build_options == expected_build_options
 
 
-def test_guard_existing_install_allows_unregistered_app(tmp_path):
-    service = InstallationService(_runtime(tmp_path))
+def test_guard_existing_install_allows_unregistered_app(runtime):
+    service = InstallationService(runtime)
 
     service._guard_existing_install(semver.Version(2, 0, 0), "demo", False)
 
 
-def test_guard_existing_install_rejects_without_force(tmp_path):
-    runtime = _runtime(tmp_path)
+def test_guard_existing_install_rejects_without_force(runtime):
     registry = Registry(runtime)
-    app = _app(tmp_path)
+    app = _app(runtime)
     registry.set(app.binary_name, app)
     service = InstallationService(runtime, registry=registry)
 
@@ -228,10 +219,9 @@ def test_guard_existing_install_rejects_without_force(tmp_path):
         service._guard_existing_install(semver.Version(2, 0, 0), "demo", False)
 
 
-def test_guard_existing_install_allows_force_and_warns(tmp_path, caplog):
-    runtime = _runtime(tmp_path)
+def test_guard_existing_install_allows_force_and_warns(runtime, caplog):
     registry = Registry(runtime)
-    app = _app(tmp_path)
+    app = _app(runtime)
     registry.set(app.binary_name, app)
     service = InstallationService(runtime, registry=registry)
 
@@ -240,10 +230,9 @@ def test_guard_existing_install_allows_force_and_warns(tmp_path, caplog):
     assert "forcing installation" in caplog.text.lower()
 
 
-def test_guard_existing_upgrade_allows_new_version(tmp_path):
-    runtime = _runtime(tmp_path)
+def test_guard_existing_upgrade_allows_new_version(runtime):
     registry = Registry(runtime)
-    app = _app(tmp_path)
+    app = _app(runtime)
     (app.lib_dir / "1.0.0").mkdir(parents=True)
     registry.set(app.binary_name, app)
     service = InstallationService(runtime, registry=registry)
@@ -251,10 +240,9 @@ def test_guard_existing_upgrade_allows_new_version(tmp_path):
     service._guard_existing_upgrade(semver.Version(2, 0, 0), "demo", False)
 
 
-def test_guard_existing_upgrade_rejects_duplicate_without_force(tmp_path):
-    runtime = _runtime(tmp_path)
+def test_guard_existing_upgrade_rejects_duplicate_without_force(runtime):
     registry = Registry(runtime)
-    app = _app(tmp_path)
+    app = _app(runtime)
     (app.lib_dir / "1.0.0").mkdir(parents=True)
     registry.set(app.binary_name, app)
     service = InstallationService(runtime, registry=registry)
@@ -263,10 +251,9 @@ def test_guard_existing_upgrade_rejects_duplicate_without_force(tmp_path):
         service._guard_existing_upgrade(semver.Version(1, 0, 0), "demo", False)
 
 
-def test_guard_existing_upgrade_allows_force_and_warns(tmp_path, caplog):
-    runtime = _runtime(tmp_path)
+def test_guard_existing_upgrade_allows_force_and_warns(runtime, caplog):
     registry = Registry(runtime)
-    app = _app(tmp_path)
+    app = _app(runtime)
     (app.lib_dir / "1.0.0").mkdir(parents=True)
     registry.set(app.binary_name, app)
     service = InstallationService(runtime, registry=registry)
@@ -276,15 +263,14 @@ def test_guard_existing_upgrade_allows_force_and_warns(tmp_path, caplog):
     assert "overwriting existing version" in caplog.text.lower()
 
 
-def test_upgrade_raises_for_unregistered_application(tmp_path):
-    service = InstallationService(_runtime(tmp_path))
+def test_upgrade_raises_for_unregistered_application(runtime):
+    service = InstallationService(runtime)
 
     with pytest.raises(errors.AppNotRegisteredError):
         service.upgrade(UpgradeRequest("demo", UpgradeOptions()))
 
 
-def test_install_applies_requested_target_permissions(tmp_path):
-    runtime = _runtime(tmp_path)
+def test_install_applies_requested_target_permissions(tmp_path, runtime):
     build_dir = tmp_path / "build"
     build_dir.mkdir()
     (build_dir / "Demo.dll").write_text("binary", encoding="utf-8")
