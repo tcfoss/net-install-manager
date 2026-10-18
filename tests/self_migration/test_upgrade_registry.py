@@ -60,10 +60,21 @@ def test_legacy_migration_converts_registry_and_adds_version_marker(tmp_path):
     assert registry.version is not None
 
 
-def test_self_migrate_command_raises_when_migration_fails(monkeypatch, tmp_path):
+def test_self_migrate_command_raises_when_migration_fails(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(self_migrate, "migrate_main", lambda _runtime: 1)
 
     with pytest.raises(errors.SelfMigrationError) as exc_info:
         SelfMigrateCommand().execute(_runtime(tmp_path / "apps.yaml"), None)
 
     assert exc_info.value.status == 1
+    assert capsys.readouterr().out == ""
+
+
+def test_self_migrate_command_reports_success(runtime, monkeypatch, capsys):
+    monkeypatch.setattr(self_migrate, "migrate_main", lambda _runtime: 0)
+
+    SelfMigrateCommand().execute(runtime, None)
+
+    assert capsys.readouterr().out == (
+        f"Successfully migrated managed files for registry '{runtime.registry_path}'.\n"
+    )

@@ -111,6 +111,7 @@ class UpgradeResult:
 
     app: AppInfo
     paths: Paths
+    previous_version: semver.Version
 
 
 def resolve_manifest(
@@ -225,6 +226,7 @@ class InstallationService:
         if not app:
             raise errors.AppNotRegisteredError(request.app_name, self._runtime.registry_path)
 
+        previous_version = app.installed_version
         app, build_options = self._apply_upgrade_modifications_get_build_options(app, request)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -269,7 +271,7 @@ class InstallationService:
             )
             self._registry.set(app.binary_name, app)
 
-            return UpgradeResult(app=app, paths=paths)
+            return UpgradeResult(app=app, paths=paths, previous_version=previous_version)
 
     def _resolve_targets(
         self,

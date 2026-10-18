@@ -46,7 +46,7 @@ def _install_versions(runtime: Runtime, monkeypatch) -> tuple[Runtime, Paths, li
     return runtime, paths, calls
 
 
-def test_rollback_switches_current_and_updates_registry(runtime, monkeypatch):
+def test_rollback_switches_current_and_updates_registry(runtime, monkeypatch, capsys):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
 
     RollbackCommand().execute(
@@ -58,9 +58,14 @@ def test_rollback_switches_current_and_updates_registry(runtime, monkeypatch):
     assert registered is not None
     assert registered.installed_version == semver.Version(2, 0, 0)
     assert calls == [("switch", "2.0.0")]
+    assert capsys.readouterr().out == (
+        "Successfully rolled back 'sample' from version 3.0.0 to 2.0.0.\n"
+    )
 
 
-def test_rollback_raises_and_does_not_change_state_for_uninstalled_target(runtime, monkeypatch):
+def test_rollback_raises_and_does_not_change_state_for_uninstalled_target(
+    runtime, monkeypatch, capsys
+):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
 
     with pytest.raises(errors.VersionNotInstalledError) as exc_info:
@@ -75,9 +80,12 @@ def test_rollback_raises_and_does_not_change_state_for_uninstalled_target(runtim
     assert not calls
     assert exc_info.value.app_name == "sample"
     assert exc_info.value.version == "4.0.0"
+    assert capsys.readouterr().out == ""
 
 
-def test_rollback_does_not_change_state_when_target_is_already_current(runtime, monkeypatch):
+def test_rollback_does_not_change_state_when_target_is_already_current(
+    runtime, monkeypatch, capsys
+):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
 
     RollbackCommand().execute(
@@ -89,6 +97,7 @@ def test_rollback_does_not_change_state_when_target_is_already_current(runtime, 
     assert registered is not None
     assert registered.installed_version == semver.Version(3, 0, 0)
     assert not calls
+    assert capsys.readouterr().out == "Application 'sample' is already at version 3.0.0.\n"
 
 
 def test_rollback_raises_for_unregistered_application(runtime):
@@ -97,6 +106,25 @@ def test_rollback_raises_for_unregistered_application(runtime):
             runtime,
             RollbackArguments("sample", semver.Version(2, 0, 0)),
         )
+
+
+def test_rollback_link_failure_does_not_report_success(runtime, monkeypatch, capsys):
+    _install_versions(runtime, monkeypatch)
+
+    class FailingOsOps:
+        @staticmethod
+        def update_current_link(*_args):
+            raise PermissionError("cannot update current")
+
+    monkeypatch.setattr(rollback, "get_os_ops", lambda _os: FailingOsOps)
+
+    with pytest.raises(PermissionError, match="cannot update current"):
+        RollbackCommand().execute(runtime, RollbackArguments("sample", semver.Version(2, 0, 0)))
+
+    app = Registry(runtime).get("sample")
+    assert app is not None
+    assert app.installed_version == semver.Version(3, 0, 0)
+    assert capsys.readouterr().out == ""
 
 
 def test_rollback_rejects_invalid_target_version():

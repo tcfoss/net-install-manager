@@ -80,4 +80,3 @@ ninman --system list-apps
 ninman --system upgrade my-app
 ninman --system uninstall my-app --yes
 ```
-

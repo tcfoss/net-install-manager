@@ -51,7 +51,7 @@ def _fail_input(_prompt: str) -> str:
     raise AssertionError("unexpected confirmation prompt")
 
 
-def test_prune_switches_current_before_deleting_active_version(runtime, monkeypatch):
+def test_prune_switches_current_before_deleting_active_version(runtime, monkeypatch, capsys):
     app = _app(runtime)
     paths = get_paths(runtime, "Sample", "sample")
     versions = [semver.Version(1, 0, 0), semver.Version(2, 0, 0), semver.Version(3, 0, 0)]
@@ -94,6 +94,9 @@ def test_prune_switches_current_before_deleting_active_version(runtime, monkeypa
     assert registered is not None
     assert registered.installed_version == semver.Version(2, 0, 0)
     assert not (paths.versions_dir / "3.0.0").exists()
+    assert capsys.readouterr().out == (
+        "Successfully pruned 1 version(s) of 'sample': 3.0.0. Current version: 2.0.0.\n"
+    )
 
 
 def test_prune_errors_when_registered_app_has_no_versions(runtime, caplog):
@@ -109,7 +112,7 @@ def test_prune_errors_when_registered_app_has_no_versions(runtime, caplog):
     assert Registry(runtime).get("sample") == app
 
 
-def test_prune_uses_min_version_to_remove_older_versions(runtime, monkeypatch):
+def test_prune_uses_min_version_to_remove_older_versions(runtime, monkeypatch, capsys):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
 
     PruneCommand().execute(
@@ -124,9 +127,12 @@ def test_prune_uses_min_version_to_remove_older_versions(runtime, monkeypatch):
     assert registered is not None
     assert registered.installed_version == semver.Version(3, 0, 0)
     assert not calls
+    assert capsys.readouterr().out == (
+        "Successfully pruned 1 version(s) of 'sample': 1.0.0. Current version: 3.0.0.\n"
+    )
 
 
-def test_prune_rejects_removing_all_versions_without_changes(runtime, monkeypatch):
+def test_prune_rejects_removing_all_versions_without_changes(runtime, monkeypatch, capsys):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
 
     with pytest.raises(errors.PruneAllError):
@@ -140,6 +146,35 @@ def test_prune_rejects_removing_all_versions_without_changes(runtime, monkeypatc
     assert registered is not None
     assert registered.installed_version == semver.Version(3, 0, 0)
     assert not calls
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("keep_latest", [1, 3], ids=["multiple-removed", "none-removed"])
+def test_prune_reports_removed_versions(runtime, monkeypatch, capsys, keep_latest):
+    _install_versions(runtime, monkeypatch)
+
+    PruneCommand().execute(runtime, PruneArguments("sample", keep_latest=keep_latest))
+
+    expected = (
+        "Successfully pruned 2 version(s) of 'sample': 1.0.0, 2.0.0. Current version: 3.0.0.\n"
+        if keep_latest == 1
+        else "Successfully pruned 0 version(s) of 'sample'. Current version: 3.0.0.\n"
+    )
+    assert capsys.readouterr().out == expected
+
+
+def test_prune_removal_failure_does_not_report_success(runtime, monkeypatch, capsys):
+    _install_versions(runtime, monkeypatch)
+
+    def fail_remove(_path):
+        raise PermissionError("cannot remove version")
+
+    monkeypatch.setattr(prune.shutil, "rmtree", fail_remove)
+
+    with pytest.raises(PermissionError, match="cannot remove version"):
+        PruneCommand().execute(runtime, PruneArguments("sample", keep_latest=1))
+
+    assert capsys.readouterr().out == ""
 
 
 @pytest.mark.parametrize(
@@ -207,7 +242,7 @@ def _raise_eof(_prompt: str) -> str:
 
 
 @pytest.mark.parametrize("respond", [lambda _prompt: "n", lambda _prompt: "", _raise_eof])
-def test_prune_cancels_without_changes_when_user_declines(runtime, monkeypatch, respond):
+def test_prune_cancels_without_changes_when_user_declines(runtime, monkeypatch, respond, capsys):
     runtime, paths, calls = _install_versions(runtime, monkeypatch)
     monkeypatch.setattr("builtins.input", respond)
 
@@ -218,6 +253,7 @@ def test_prune_cancels_without_changes_when_user_declines(runtime, monkeypatch, 
     registered = Registry(runtime).get("sample")
     assert registered is not None
     assert registered.installed_version == semver.Version(3, 0, 0)
+    assert capsys.readouterr().out == ""
 
 
 def test_prune_does_not_prompt_when_current_is_kept(runtime, monkeypatch):

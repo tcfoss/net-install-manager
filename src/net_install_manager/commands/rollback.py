@@ -43,6 +43,7 @@ class RollbackCommand(BaseCommand[RollbackArguments]):
                 args.app_name,
                 args.target_version,
             )
+            print(f"Application '{args.app_name}' is already at version {args.target_version}.")
             return
 
         paths = get_paths_from_app_info(runtime, app_info)
@@ -55,8 +56,13 @@ class RollbackCommand(BaseCommand[RollbackArguments]):
 
         os_ops.update_current_link(paths.versions_dir, str(args.target_version), paths.current_dir)
 
+        previous_version = app_info.installed_version
         app_info = replace(app_info, installed_version=args.target_version)
         registry.set(app_info.binary_name, app_info)
+        print(
+            f"Successfully rolled back '{args.app_name}' "
+            f"from version {previous_version} to {args.target_version}."
+        )
 
     @staticmethod
     def register_command(subparsers: _SubParsersAction) -> ArgumentParser:
