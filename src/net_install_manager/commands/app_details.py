@@ -37,21 +37,21 @@ class AppDetailsCommand(BaseCommand[AppDetailsArgs]):
         print("    Source:")
         match app.app_source:
             case aps.CodeAppSource() as cs:
-                print("        Source type: Local Code")
+                print("        Source type:   Local Code")
                 print(f"        Path:          {cs.project_path}")
                 AppDetailsCommand._print_build_options(cs.build_options)
             case aps.BuiltAppSource() as bs:
-                print("        Source type: Built Artifact")
+                print("        Source type:   Built Artifact")
                 print(f"        Path:          {bs.build_path}")
             case aps.GitCodeAppSource() as gs:
                 print("        Source type: Git Code")
-                print(f"        Clone URL:    {gs.clone_url}")
+                print(f"        Clone URL:   {gs.clone_url}")
                 print(f"        Ref:         {gs.ref}")
                 print(f"        Subpath:     {gs.subpath}")
                 AppDetailsCommand._print_build_options(gs.build_options)
                 print(f"        Cache dir:   {gs.cache_dir}")
             case aps.GitHubReleaseAppSource() as rs:
-                print("        Source type: GitHub Release")
+                print("        Source type:   GitHub Release")
                 print(f"        Owner:         {rs.owner}")
                 print(f"        Repo:          {rs.repo}")
                 print(f"        Tag:           {rs.tag}")

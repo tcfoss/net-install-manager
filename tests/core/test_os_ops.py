@@ -1,18 +1,33 @@
+import os
+
 import pytest
 
 from net_install_manager.config.paths import Paths
 from net_install_manager.core import os_ops
 from net_install_manager.runtime.operating_system import OperatingSystem
+from net_install_manager.utilities.sh import exec_command_output
+
+requires_posix_mode = pytest.mark.skipif(
+    os.name == "nt", reason="Windows does not expose POSIX file permission bits"
+)
+requires_posix_symlinks = pytest.mark.skipif(
+    os.name == "nt", reason="POSIX symlink behavior is unavailable without Windows privileges"
+)
 
 
-def test_posix_mirror_directory_copies_and_excludes(tmp_path):
+@pytest.fixture(params=[os_ops.PosixOsOps, os_ops.WindowsOsOps], ids=["posix", "windows"])
+def ops(request):
+    return request.param
+
+
+def test_mirror_directory_copies_and_excludes(tmp_path, ops):
     source = tmp_path / "source"
     source.mkdir()
     (source / "keep.txt").write_text("keep", encoding="utf-8")
     (source / "omit.tmp").write_text("omit", encoding="utf-8")
     destination = tmp_path / "nested" / "destination"
 
-    os_ops.PosixOsOps.mirror_directory(source, destination, ["*.tmp"])
+    ops.mirror_directory(source, destination, ["*.tmp"])
 
     assert (destination / "keep.txt").read_text(encoding="utf-8") == "keep"
     assert not (destination / "omit.tmp").exists()
@@ -22,16 +37,16 @@ def test_posix_mirror_directory_copies_and_excludes(tmp_path):
     ("source_kind", "error"),
     [("missing", FileNotFoundError), ("file", NotADirectoryError)],
 )
-def test_posix_mirror_directory_validates_source(tmp_path, source_kind, error):
+def test_mirror_directory_validates_source(tmp_path, ops, source_kind, error):
     source = tmp_path / "missing"
     if source_kind == "file":
         source.write_text("not a directory", encoding="utf-8")
 
     with pytest.raises(error):
-        os_ops.PosixOsOps.mirror_directory(source, tmp_path / "destination")
+        ops.mirror_directory(source, tmp_path / "destination")
 
 
-def test_posix_mirror_directory_replaces_existing_destination(tmp_path):
+def test_mirror_directory_replaces_existing_destination(tmp_path, ops):
     source = tmp_path / "source"
     source.mkdir()
     (source / "new.txt").write_text("new", encoding="utf-8")
@@ -39,12 +54,13 @@ def test_posix_mirror_directory_replaces_existing_destination(tmp_path):
     destination.mkdir()
     (destination / "old.txt").write_text("old", encoding="utf-8")
 
-    os_ops.PosixOsOps.mirror_directory(source, destination)
+    ops.mirror_directory(source, destination)
 
     assert (destination / "new.txt").exists()
     assert not (destination / "old.txt").exists()
 
 
+@requires_posix_mode
 def test_posix_make_executable_sets_execute_bits(tmp_path):
     path = tmp_path / "app"
     path.write_text("app", encoding="utf-8")
@@ -61,6 +77,7 @@ def test_posix_make_executable_rejects_missing_file(tmp_path):
 
 
 @pytest.mark.parametrize(("permissions", "expected"), [(0o640, 0o640), ("700", 0o700)])
+@requires_posix_mode
 def test_posix_set_permissions_accepts_integer_and_octal_string(tmp_path, permissions, expected):
     path = tmp_path / "app"
     path.write_text("app", encoding="utf-8")
@@ -81,6 +98,7 @@ def test_posix_set_permissions_ignores_invalid_string_and_missing_path(tmp_path)
     assert path.stat().st_mode & 0o777 == original_mode
 
 
+@requires_posix_symlinks
 def test_posix_update_current_link_points_to_installed_version(tmp_path):
     versions = tmp_path / "versions"
     target = versions / "1.2.3"
@@ -94,6 +112,7 @@ def test_posix_update_current_link_points_to_installed_version(tmp_path):
     assert current.resolve() == target.resolve()
 
 
+@requires_posix_symlinks
 def test_posix_update_current_link_replaces_previous_link(tmp_path):
     versions = tmp_path / "versions"
     for version in ("1.0.0", "2.0.0"):
@@ -107,11 +126,12 @@ def test_posix_update_current_link_replaces_previous_link(tmp_path):
     assert current.resolve() == (versions / "2.0.0").resolve()
 
 
-def test_update_current_link_rejects_missing_version(tmp_path):
+def test_update_current_link_rejects_missing_version(tmp_path, ops):
     with pytest.raises(FileNotFoundError):
-        os_ops.PosixOsOps.update_current_link(tmp_path / "versions", "1.0.0", tmp_path / "current")
+        ops.update_current_link(tmp_path / "versions", "1.0.0", tmp_path / "current")
 
 
+@requires_posix_symlinks
 def test_posix_create_launcher_symlinks_native_executable(tmp_path):
     binary = tmp_path / "versions" / "current" / "app"
     binary.parent.mkdir(parents=True)
@@ -124,6 +144,7 @@ def test_posix_create_launcher_symlinks_native_executable(tmp_path):
     assert (bin_dir / "sample").resolve() == binary
 
 
+@requires_posix_mode
 def test_posix_create_launcher_writes_dotnet_wrapper_for_dll(tmp_path):
     binary = tmp_path / "versions" / "current" / "app.dll"
     binary.parent.mkdir(parents=True)
@@ -136,7 +157,15 @@ def test_posix_create_launcher_writes_dotnet_wrapper_for_dll(tmp_path):
     assert launcher.stat().st_mode & 0o111
 
 
-@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "missing"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "file",
+        "directory",
+        pytest.param("symlink", marks=requires_posix_symlinks),
+        "missing",
+    ],
+)
 def test_posix_remove_link_or_dir_handles_path_kinds(tmp_path, kind):
     path = tmp_path / "target"
     if kind == "file":
@@ -154,6 +183,7 @@ def test_posix_remove_link_or_dir_handles_path_kinds(tmp_path, kind):
     assert not path.exists(follow_symlinks=False)
 
 
+@requires_posix_symlinks
 def test_posix_remove_application_handles_app_named_versions(tmp_path):
     library_parent = tmp_path / ".local" / "lib"
     lib_dir = library_parent / "versions"
@@ -257,13 +287,71 @@ def test_windows_remove_link_or_dir_removes_nonempty_directory(tmp_path):
     assert not path.exists()
 
 
+def test_windows_permission_operations_are_noops(tmp_path):
+    path = tmp_path / "app"
+    path.write_text("binary", encoding="utf-8")
+    original_mode = path.stat().st_mode
+
+    os_ops.WindowsOsOps.make_executable(path)
+    os_ops.WindowsOsOps.set_permissions(path, "700")
+    os_ops.WindowsOsOps.set_permissions(path, 0o640)
+
+    assert path.stat().st_mode == original_mode
+    assert path.read_text(encoding="utf-8") == "binary"
+
+
+def test_native_current_link_replacement_and_removal_preserve_versions(native_runtime, tmp_path):
+    native_ops = os_ops.get_os_ops(native_runtime.os)
+    versions = tmp_path / "versions"
+    first = versions / "1.0.0"
+    second = versions / "2.0.0"
+    first.mkdir(parents=True)
+    second.mkdir()
+    (first / "marker").write_text("first", encoding="utf-8")
+    (second / "marker").write_text("second", encoding="utf-8")
+    current = tmp_path / "application" / "current"
+
+    native_ops.update_current_link(versions, first.name, current)
+    assert current.resolve() == first.resolve()
+    native_ops.update_current_link(versions, second.name, current)
+    assert current.resolve() == second.resolve()
+    assert (current / "marker").read_text(encoding="utf-8") == "second"
+    native_ops.remove_link_or_dir(current)
+
+    assert not current.exists(follow_symlinks=False)
+    assert (first / "marker").read_text(encoding="utf-8") == "first"
+    assert (second / "marker").read_text(encoding="utf-8") == "second"
+
+
+def test_native_launcher_executes_target_with_arguments(native_runtime, tmp_path):
+    native_ops = os_ops.get_os_ops(native_runtime.os)
+    bin_dir = tmp_path / "bin directory"
+    target_dir = tmp_path / "application directory"
+    target_dir.mkdir()
+    if native_runtime.os.is_posix:
+        target = target_dir / "app"
+        target.write_text('#!/bin/sh\nprintf "%s\\n" "$1"\n', encoding="utf-8")
+    else:
+        target = target_dir / "app.cmd"
+        target.write_text("@echo off\necho %~1\n", encoding="utf-8")
+    native_ops.make_executable(target)
+    native_ops.create_bin_launcher(bin_dir, "sample", target)
+    launcher = bin_dir / "sample"
+    if native_runtime.os.is_posix:
+        command = [str(launcher), "argument with spaces"]
+    else:
+        command = ["cmd", "/c", "sample.cmd", "argument with spaces"]
+
+    assert exec_command_output(command, cwd=str(bin_dir)).strip() == "argument with spaces"
+
+
 def test_windows_remove_application_cleans_app_root_and_both_launchers(tmp_path):
     app_root = tmp_path / "Program Files" / "DemoApp"
     versions_dir = app_root / "versions"
     version_dir = versions_dir / "1.0.0"
     version_dir.mkdir(parents=True)
     current_dir = app_root / "current"
-    current_dir.symlink_to(version_dir, target_is_directory=True)
+    current_dir.mkdir()
     bin_dir = tmp_path / "home" / ".local" / "bin"
     bin_dir.mkdir(parents=True)
     bin_path = bin_dir / "sample"

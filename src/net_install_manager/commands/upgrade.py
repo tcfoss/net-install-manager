@@ -18,7 +18,11 @@ class UpgradeCommand(BaseCommand[UpgradeRequest]):
 
     def execute(self, runtime: Runtime, args: UpgradeRequest) -> None:
         """Execute the upgrade command."""
-        InstallationService(runtime).upgrade(args)
+        result = InstallationService(runtime).upgrade(args)
+        print(
+            f"Successfully upgraded '{result.app.binary_name}' "
+            f"from version {result.previous_version} to {result.app.installed_version}."
+        )
 
     @staticmethod
     def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:

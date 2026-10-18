@@ -74,7 +74,9 @@ def get_paths_from_app_info(runtime: Runtime, app_info: AppInfo) -> Paths:
 
     return get_paths(
         runtime=runtime,
-        app_directory=app_info.lib_dir.name,
+        app_directory=(
+            app_info.lib_dir.name if runtime.os.is_posix else app_info.lib_dir.parent.name
+        ),
         binary_name=app_info.binary_name,
         prefer_opt=Path("/opt") in app_info.lib_dir.parents,
     )

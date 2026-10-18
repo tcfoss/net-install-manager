@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path, PureWindowsPath
 
 import pytest
@@ -98,3 +99,23 @@ def test_paths_from_registered_app_preserve_posix_prefix(lib_dir, system_wide, e
     )
 
     assert get_paths_from_app_info(runtime, app).lib_dir == expected
+
+
+@pytest.mark.parametrize("system_wide", [False, True], ids=["user", "system"])
+@pytest.mark.parametrize("app_directory", ["Sample", "versions"])
+def test_paths_from_registered_app_round_trip(runtime, tmp_path, system_wide, app_directory):
+    runtime = replace(
+        runtime,
+        system_wide=system_wide,
+        env={"PROGRAMFILES": str(tmp_path / "Program Files")},
+    )
+    expected = get_paths(runtime, app_directory, "sample")
+    app = AppInfo(
+        "sample",
+        "Sample.dll",
+        expected.lib_dir,
+        semver.Version(1, 0, 0),
+        BuiltAppSource(tmp_path / "build"),
+    )
+
+    assert get_paths_from_app_info(runtime, app) == expected

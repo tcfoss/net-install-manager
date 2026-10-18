@@ -45,6 +45,10 @@ class UninstallCommand(BaseCommand[UninstallArguments]):
 
         registry.remove(app_info.binary_name)
         logger.info("Application '%s' uninstalled successfully.", args.app_name)
+        print(
+            f"Successfully uninstalled '{args.app_name}' "
+            f"(version {app_info.installed_version})."
+        )
 
     @staticmethod
     def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:

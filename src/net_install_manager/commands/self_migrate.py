@@ -15,6 +15,7 @@ class SelfMigrateCommand(BaseCommand):
         status = migrate_main(runtime)
         if status != 0:
             raise errors.SelfMigrationError(status)
+        print(f"Successfully migrated managed files for registry '{runtime.registry_path}'.")
 
     @staticmethod
     def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:

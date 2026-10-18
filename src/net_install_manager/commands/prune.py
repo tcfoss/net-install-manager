@@ -85,17 +85,26 @@ class PruneCommand(BaseCommand[PruneArguments]):
             app_info = replace(app_info, installed_version=new_installed_version)
             registry.set(app_info.binary_name, app_info)
 
+        removed_versions = []
         for version in versions_to_prune:
             version_dir = paths.versions_dir / str(version)
             logger.info("Pruning version '%s' for application '%s'.", version, args.app_name)
             if version_dir.exists():
                 shutil.rmtree(version_dir)
+                removed_versions.append(version)
             else:
                 logger.warning(
                     "Version directory '%s' does not exist for application '%s'.",
                     version_dir,
                     args.app_name,
                 )
+
+        pruned_versions = ", ".join(str(version) for version in sorted(removed_versions))
+        print(
+            f"Successfully pruned {len(removed_versions)} version(s) of '{args.app_name}'"
+            f"{': ' + pruned_versions if pruned_versions else ''}. "
+            f"Current version: {app_info.installed_version}."
+        )
 
     @staticmethod
     def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:

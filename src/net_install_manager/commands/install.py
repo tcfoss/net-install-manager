@@ -16,7 +16,11 @@ class InstallCommand(BaseCommand[InstallationRequest]):
     """Install an application."""
 
     def execute(self, runtime: Runtime, args: InstallationRequest) -> None:
-        InstallationService(runtime).install(args)
+        result = InstallationService(runtime).install(args)
+        print(
+            f"Successfully installed '{result.app.binary_name}' "
+            f"version {result.app.installed_version} at '{result.paths.lib_dir}'."
+        )
 
     @staticmethod
     def register_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
