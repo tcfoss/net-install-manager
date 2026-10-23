@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -385,3 +387,190 @@ def test_windows_remove_application_cleans_app_root_and_both_launchers(tmp_path)
 )
 def test_get_os_ops_selects_platform_implementation(target_os, expected):
     assert os_ops.get_os_ops(target_os) is expected
+
+
+def test_posix_make_executable_logs_chmod_failure(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "app"
+    path.touch()
+    chmod = Mock(side_effect=PermissionError("access denied"))
+    monkeypatch.setattr(Path, "chmod", chmod)
+
+    os_ops.PosixOsOps.make_executable(path)
+
+    chmod.assert_called_once_with(path.stat().st_mode | 0o111 | 0o755)
+    assert "Could not set executable permissions" in caplog.text
+    assert "access denied" in caplog.text
+
+
+@pytest.mark.parametrize(("permissions", "mode"), [(0o640, 0o640), ("700", 0o700)])
+def test_posix_set_permissions_passes_mode_to_chmod(tmp_path, monkeypatch, permissions, mode):
+    path = tmp_path / "app"
+    path.touch()
+    chmod = Mock()
+    monkeypatch.setattr(Path, "chmod", chmod)
+
+    os_ops.PosixOsOps.set_permissions(path, permissions)
+
+    chmod.assert_called_once_with(mode)
+
+
+def test_posix_set_permissions_none_does_not_change_file(tmp_path, monkeypatch):
+    path = tmp_path / "app"
+    path.touch()
+    chmod = Mock()
+    monkeypatch.setattr(Path, "chmod", chmod)
+
+    os_ops.PosixOsOps.set_permissions(path)
+
+    chmod.assert_not_called()
+
+
+@pytest.mark.parametrize("nested_versions", [False, True])
+@requires_posix_symlinks
+def test_posix_update_current_link_cleans_stale_temporary_link(tmp_path, nested_versions):
+    app_dir = tmp_path / "app"
+    versions = app_dir / "versions" if nested_versions else tmp_path / "versions"
+    target = versions / "1.0.0"
+    target.mkdir(parents=True)
+    app_dir.mkdir(exist_ok=True)
+    temporary = app_dir / f".current_tmp_{os.getpid()}"
+    temporary.symlink_to(tmp_path / "missing")
+    current = app_dir / "current"
+
+    assert os_ops.PosixOsOps.update_current_link(versions, "1.0.0", current) == current
+
+    assert current.resolve() == target.resolve()
+    assert current.readlink().is_absolute() != nested_versions
+    assert not temporary.exists(follow_symlinks=False)
+
+
+@requires_posix_symlinks
+def test_posix_create_launcher_replaces_dangling_link_with_dll_wrapper(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "demo"
+    launcher.symlink_to(tmp_path / "missing")
+    binary = tmp_path / "Demo.DLL"
+
+    os_ops.PosixOsOps.create_bin_launcher(bin_dir, "demo", binary)
+
+    assert not launcher.is_symlink()
+    assert launcher.read_text(encoding="utf-8") == f'#!/bin/sh\nexec dotnet "{binary}" "$@"\n'
+    assert launcher.stat().st_mode & 0o111
+
+
+@pytest.mark.parametrize("ops_type", [os_ops.PosixOsOps, os_ops.WindowsOsOps])
+def test_update_current_link_rejects_version_that_is_a_file(tmp_path, ops_type):
+    version = tmp_path / "versions" / "1.0.0"
+    version.parent.mkdir()
+    version.touch()
+
+    with pytest.raises(FileNotFoundError, match="Target version directory"):
+        ops_type.update_current_link(version.parent, version.name, tmp_path / "current")
+
+
+@pytest.mark.parametrize("suffix", [".dll", ".exe"])
+def test_windows_launcher_falls_back_when_relative_path_is_unavailable(
+    tmp_path, monkeypatch, suffix
+):
+    bin_dir = tmp_path / "bin"
+    target = tmp_path / f"Demo{suffix}"
+    monkeypatch.setattr(Path, "relative_to", Mock(side_effect=ValueError("different roots")))
+
+    os_ops.WindowsOsOps.create_bin_launcher(bin_dir, "demo.cmd", target)
+
+    command = (bin_dir / "demo.cmd").read_bytes().decode("utf-8")
+    shell = (bin_dir / "demo").read_text(encoding="utf-8")
+    prefix = "@dotnet " if suffix == ".dll" else "@"
+    assert command == f'{prefix}"%~dp0{target}" %*\r\n'
+    assert str(target).replace("\\", "/") in shell
+    assert not (bin_dir / "demo.cmd.cmd").exists()
+
+
+@requires_posix_symlinks
+def test_windows_remove_link_or_dir_unlinks_symlink_without_removing_target(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(target, target_is_directory=True)
+
+    os_ops.WindowsOsOps.remove_link_or_dir(link)
+
+    assert not link.exists(follow_symlinks=False)
+    assert target.is_dir()
+
+
+@pytest.mark.parametrize("nested_versions", [False, True])
+def test_posix_current_link_uses_relative_target_when_possible(
+    tmp_path, monkeypatch, nested_versions
+):
+    app_dir = tmp_path / "app"
+    versions = app_dir / "versions" if nested_versions else tmp_path / "versions"
+    target = versions / "1.0.0"
+    target.mkdir(parents=True)
+    app_dir.mkdir(exist_ok=True)
+    temporary = app_dir / f".current_tmp_{os.getpid()}"
+    temporary.touch()
+    current = app_dir / "current"
+    calls = []
+
+    def symlink_to(path, link_target):
+        assert path == temporary
+        assert not temporary.exists()
+        calls.append(("link", link_target))
+
+    def replace(path, destination):
+        assert path == temporary
+        calls.append(("replace", destination))
+        return destination
+
+    monkeypatch.setattr(Path, "symlink_to", symlink_to)
+    monkeypatch.setattr(Path, "replace", replace)
+
+    assert os_ops.PosixOsOps.update_current_link(versions, "1.0.0", current) == current
+
+    expected = Path("versions") / "1.0.0" if nested_versions else target
+    assert calls == [("link", expected), ("replace", current)]
+
+
+@pytest.mark.parametrize("is_dll", [False, True])
+def test_posix_launcher_replaces_existing_file(tmp_path, monkeypatch, is_dll):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "demo"
+    launcher.write_text("old launcher", encoding="utf-8")
+    target = tmp_path / ("Demo.dll" if is_dll else "Demo")
+    symlink = Mock()
+    executable = Mock()
+    monkeypatch.setattr(Path, "symlink_to", symlink)
+    monkeypatch.setattr(os_ops.PosixOsOps, "make_executable", executable)
+
+    os_ops.PosixOsOps.create_bin_launcher(bin_dir, "demo", target)
+
+    if is_dll:
+        assert launcher.read_text(encoding="utf-8") == f'#!/bin/sh\nexec dotnet "{target}" "$@"\n'
+        executable.assert_called_once_with(launcher)
+        symlink.assert_not_called()
+    else:
+        assert not launcher.exists()
+        symlink.assert_called_once_with(target)
+        executable.assert_not_called()
+
+
+def test_posix_remove_application_cleans_library_and_launcher(tmp_path):
+    lib_dir = tmp_path / "lib" / "demo"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "binary").touch()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "demo"
+    launcher.touch()
+    sibling = bin_dir / "other"
+    sibling.touch()
+    paths = Paths(lib_dir, lib_dir, lib_dir / "current", bin_dir, launcher)
+
+    os_ops.PosixOsOps.remove_application(paths)
+
+    assert not lib_dir.exists()
+    assert not launcher.exists()
+    assert sibling.exists()

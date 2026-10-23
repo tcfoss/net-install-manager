@@ -275,3 +275,39 @@ def test_prune_command_parses_assume_yes(flags, expected):
     namespace = parser.parse_args(["prune", "sample", "--keep-latest", "1", *flags])
 
     assert PruneCommand.parse_arguments(Runtime.current(), namespace).assume_yes is expected
+
+
+def test_prune_parses_semantic_version_bounds(runtime):
+    parser = argparse.ArgumentParser()
+    command_parser = PruneCommand.register_command(parser.add_subparsers())
+    namespace = parser.parse_args(
+        ["prune", "sample", "--min-version", "v1.0.0", "--max-version", "2.0.0", "-y"]
+    )
+
+    PruneCommand.validate_arguments(command_parser, runtime, namespace)
+
+    assert PruneCommand.parse_arguments(runtime, namespace) == PruneArguments(
+        "sample", min_version=semver.Version(1, 0, 0),
+        max_version=semver.Version(2, 0, 0), assume_yes=True,
+    )
+
+
+def test_prune_warns_if_version_disappears_after_listing(runtime, monkeypatch, caplog, capsys):
+    _, paths, _ = _install_versions(runtime, monkeypatch)
+    get_versions = Registry.get_app_with_versions
+
+    def get_then_remove(registry, name):
+        result = get_versions(registry, name)
+        shutil.rmtree(paths.versions_dir / "1.0.0")
+        return result
+
+    monkeypatch.setattr(Registry, "get_app_with_versions", get_then_remove)
+
+    PruneCommand().execute(runtime, PruneArguments("sample", keep_latest=2))
+
+    assert "does not exist for application 'sample'" in caplog.text
+    assert capsys.readouterr().out == (
+        "Successfully pruned 0 version(s) of 'sample'. Current version: 3.0.0.\n"
+    )
+    assert (paths.versions_dir / "2.0.0").is_dir()
+    assert (paths.versions_dir / "3.0.0").is_dir()

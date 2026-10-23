@@ -167,3 +167,30 @@ def test_publish_constructs_dotnet_publish_command(monkeypatch, tmp_path):
             "linux-x64",
         ]
     ]
+
+
+def test_find_nested_project_file_ignores_files_and_empty_subdirectories(tmp_path):
+    (tmp_path / "readme.txt").touch()
+    (tmp_path / "empty").mkdir()
+    project = tmp_path / "src" / "App.csproj"
+    project.parent.mkdir()
+    project.touch()
+
+    assert csproj.find_nested_project_file(tmp_path) == project
+
+
+@pytest.mark.parametrize("project_names", [[], ["One.Tests", "Two.Tests"]])
+def test_find_nested_project_file_returns_none_without_suitable_project(tmp_path, project_names):
+    for name in project_names:
+        project = tmp_path / name / f"{name}.csproj"
+        project.parent.mkdir()
+        project.touch()
+
+    assert csproj.find_nested_project_file(tmp_path) is None
+
+
+def test_get_version_from_csproj_returns_none_without_version_properties(tmp_path):
+    project = tmp_path / "App.csproj"
+    project.write_text("<Project><PropertyGroup /></Project>", encoding="utf-8")
+
+    assert csproj.get_version_from_csproj(project) is None

@@ -36,6 +36,7 @@ def _runtime(home=Path("/home/tester"), env=None):
         ("./example/project", False),
         (r"C:\work\project", False),
         ("", False),
+        ("not-a-repository", False),
     ],
 )
 def test_is_git_url(source, expected):
@@ -466,3 +467,20 @@ def test_download_artifact_copies_non_archive_asset(monkeypatch, tmp_path):
     )
 
     assert (artifact_dir / asset_path.name).read_bytes() == b"binary"
+
+
+def test_checkout_default_branch_reports_invalid_remote_head(runtime, monkeypatch):
+    source = GitCodeAppSource(
+        "https://example.com/demo.git", None, Path(), BuildOptions(), runtime.home_dir / "cache"
+    )
+    commands = []
+    monkeypatch.setattr(git, "exec_command", lambda *args, **kwargs: commands.append(args))
+    monkeypatch.setattr(git, "exec_command_output", lambda *args, **kwargs: "upstream/main")
+
+    with pytest.raises(errors.GitBranchError) as exc_info:
+        git._checkout_default_branch(source)
+
+    assert exc_info.value.clone_url == source.clone_url
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert "Could not resolve the default branch" in str(exc_info.value.__cause__)
+    assert commands == [(["git", "remote", "set-head", "origin", "--auto"],)]

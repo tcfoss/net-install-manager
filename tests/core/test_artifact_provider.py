@@ -225,3 +225,33 @@ def test_prepare_and_build_returns_prepared_artifact(monkeypatch, tmp_path):
         prepared_source, artifact_dir, project_path
     )
     assert calls == [(source, runtime, working_dir, "token")]
+
+
+@pytest.mark.parametrize("subpath", [Path("/dev/null"), Path("empty")])
+def test_prepare_source_rejects_git_directory_without_project(runtime, tmp_path, monkeypatch, subpath):
+    cache = tmp_path / "cache"
+    (cache / "empty").mkdir(parents=True)
+    source = app_sources.GitCodeAppSource(
+        "https://example.com/demo.git", None, subpath, BuildOptions(), cache
+    )
+    monkeypatch.setattr(artifact_provider.git_utils, "clone_or_update_repo", lambda _source: None)
+
+    with pytest.raises(errors.InvalidSourceError):
+        artifact_provider.DefaultArtifactProvider().prepare_source(source, runtime, tmp_path)
+
+
+def test_prepare_source_resolves_project_in_given_git_directory(runtime, tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    project = cache / "src" / "App.csproj"
+    project.parent.mkdir(parents=True)
+    project.touch()
+    source = app_sources.GitCodeAppSource(
+        "https://example.com/demo.git", "main", Path("src"), BuildOptions(), cache
+    )
+    monkeypatch.setattr(artifact_provider.git_utils, "clone_or_update_repo", lambda _source: None)
+
+    prepared = artifact_provider.DefaultArtifactProvider().prepare_source(source, runtime, tmp_path)
+
+    assert isinstance(prepared, app_sources.GitCodeAppSource)
+    assert prepared.project_path == project
+    assert prepared.subpath == Path("src") / "App.csproj"
