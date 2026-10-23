@@ -1,3 +1,5 @@
+import argparse
+
 import pytest
 import semver
 
@@ -77,3 +79,12 @@ def test_uninstall_cleanup_failure_does_not_report_success(runtime, monkeypatch,
 
     assert Registry(runtime).get("sample") == app
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(("flags", "assume_yes"), [([], False), (["-y"], True), (["--yes"], True)])
+def test_uninstall_parses_confirmation_flag(runtime, flags, assume_yes):
+    parser = argparse.ArgumentParser()
+    UninstallCommand.register_command(parser.add_subparsers())
+    args = parser.parse_args(["uninstall", "sample", *flags])
+
+    assert UninstallCommand.parse_arguments(runtime, args) == UninstallArguments("sample", assume_yes)

@@ -51,7 +51,7 @@ jobs:
       - uses: tcfoss/github-actions/.github/actions/setup-poetry@v1
 
       - name: Test
-        run: poetry run pytest --cov=net_install_manager --cov-report=xml:TestResults/coverage.cobertura.xml
+        run: poetry run pytest --cov=net_install_manager --cov-branch --cov-report=xml:TestResults/coverage.cobertura.xml
 
       - name: Normalize coverage reports
         shell: bash

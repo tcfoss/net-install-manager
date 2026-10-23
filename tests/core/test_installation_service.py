@@ -321,3 +321,28 @@ def test_find_source_binary_resolves_changed_artifact_suffix(
     resolved = InstallationService._find_source_binary(tmp_path, targets)
 
     assert resolved == ResolvedTargets("demo", resolved_name, "Demo")
+
+
+def test_find_source_binary_reports_missing_executable(tmp_path):
+    targets = ResolvedTargets("demo", "Demo.dll", "Demo")
+    (tmp_path / "Demo.dll").mkdir()
+
+    with pytest.raises(errors.ExecutableNotFoundError) as exc_info:
+        InstallationService._find_source_binary(tmp_path, targets)
+
+    assert exc_info.value.executable_name == "Demo.dll"
+    assert exc_info.value.search_path == tmp_path
+    assert str(tmp_path) in str(exc_info.value)
+
+
+def test_resolve_version_raises_when_project_has_no_version(tmp_path, monkeypatch):
+    project = tmp_path / "App.csproj"
+    project.write_text("<Project />", encoding="utf-8")
+    artifact = PreparedArtifact(app_sources.BuiltAppSource(tmp_path), tmp_path, project)
+    monkeypatch.setattr(
+        "net_install_manager.core.installation_service.version_utils.get_version_from_binary",
+        lambda _path: None,
+    )
+
+    with pytest.raises(errors.UnresolvedVersionError):
+        InstallationService._resolve_version(artifact, ResolvedTargets("demo", "Demo", "Demo"), None)

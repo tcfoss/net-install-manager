@@ -73,3 +73,15 @@ def test_exec_command_output_returns_stdout(monkeypatch):
     )
 
     assert sh.exec_command_output(["tool"]) == "version\n"
+
+
+@pytest.mark.parametrize("output", [CommandOutput.QUIET, CommandOutput.CAPTURE])
+def test_exec_command_passes_explicit_non_stream_output_mode(monkeypatch, output, caplog):
+    calls = []
+    monkeypatch.setattr(sh, "run_command", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    with caplog.at_level("INFO", logger=sh.__name__):
+        sh.exec_command(["tool"], output=output)
+
+    assert calls == [((["tool"],), {"cwd": None, "output": output})]
+    assert "Executing command" not in caplog.text

@@ -136,3 +136,15 @@ def test_rollback_rejects_invalid_target_version():
         RollbackCommand.validate_arguments(parser, Runtime.current(), args)
 
     assert exc_info.value.code == 2
+
+
+def test_rollback_parses_valid_semantic_version(runtime):
+    parser = argparse.ArgumentParser()
+    command_parser = RollbackCommand.register_command(parser.add_subparsers())
+    args = parser.parse_args(["rollback", "sample", "v1.2.3"])
+
+    RollbackCommand.validate_arguments(command_parser, runtime, args)
+
+    assert RollbackCommand.parse_arguments(runtime, args) == RollbackArguments(
+        "sample", semver.Version(1, 2, 3)
+    )

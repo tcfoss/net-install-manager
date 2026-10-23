@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import semver
@@ -7,7 +8,9 @@ import yaml
 from net_install_manager.__version__ import __version__
 from net_install_manager.config.app_info import AppInfo
 from net_install_manager.config.app_sources import BuiltAppSource
+from net_install_manager.config.paths import get_paths_from_app_info
 from net_install_manager.core import errors
+from net_install_manager.core import registry as registry_module
 from net_install_manager.core.registry import Registry
 from net_install_manager.runtime.architecture import Architecture
 from net_install_manager.runtime.operating_system import OperatingSystem
@@ -132,3 +135,63 @@ def test_registry_get_installed_versions_warning_on_unparseable_version_director
     assert versions
     assert not versions.versions
     assert any("Failed to parse version" in record.message for record in caplog.records)
+
+
+def test_registry_rejects_invalid_version_marker(runtime):
+    runtime.registry_path.parent.mkdir(parents=True)
+    runtime.registry_path.write_text('__NINMAN_VERSION__: "invalid"\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Failed to parse registry version"):
+        Registry(runtime)
+
+
+def test_registry_ignores_files_and_current_when_listing_versions(runtime):
+    registry = Registry(runtime)
+    app = _app("sample")
+    registry.set("sample", app)
+    paths = get_paths_from_app_info(runtime, app)
+    (paths.versions_dir / "1.2.3").mkdir(parents=True)
+    (paths.versions_dir / "current").mkdir()
+    (paths.versions_dir / "2.0.0").touch()
+
+    versions = registry.get_installed_versions("sample")
+
+    assert versions is not None
+    assert versions.versions == [semver.Version(1, 2, 3)]
+    assert versions.current == app.installed_version
+
+
+def test_registry_save_replace_failure_preserves_original_and_cleans_temp(runtime, monkeypatch):
+    runtime.registry_path.parent.mkdir(parents=True)
+    contents = '__NINMAN_VERSION__: "0.2.0"\n'
+    runtime.registry_path.write_text(contents, encoding="utf-8")
+    registry = Registry(runtime)
+    before = set(runtime.registry_path.parent.iterdir())
+
+    def fail_replace(_path, _target):
+        raise PermissionError("registry locked")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(PermissionError, match="registry locked"):
+        registry.set("sample", _app("sample"))
+
+    assert runtime.registry_path.read_text(encoding="utf-8") == contents
+    assert set(runtime.registry_path.parent.iterdir()) == before
+
+
+def test_registry_save_reports_temporary_file_creation_failure(runtime, monkeypatch):
+    runtime.registry_path.parent.mkdir(parents=True)
+    contents = '__NINMAN_VERSION__: "0.2.0"\n'
+    runtime.registry_path.write_text(contents, encoding="utf-8")
+    registry = Registry(runtime)
+    monkeypatch.setattr(
+        registry_module.tempfile, "NamedTemporaryFile",
+        Mock(side_effect=PermissionError("cannot create temporary file")),
+    )
+
+    with pytest.raises(PermissionError, match="cannot create temporary file"):
+        registry.set("sample", _app("sample"))
+
+    assert runtime.registry_path.read_text(encoding="utf-8") == contents
+    assert list(runtime.registry_path.parent.iterdir()) == [runtime.registry_path]
