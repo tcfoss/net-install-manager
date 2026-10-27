@@ -2,7 +2,11 @@ name: Active Pull Request
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, edited, labeled, unlabeled, ready_for_review]
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+concurrency:
+  group: active-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   validate-work-items:
@@ -96,6 +100,10 @@ jobs:
       always() &&
       needs.unit-tests.result == 'success'
     uses: tcfoss/github-actions/.github/workflows/coverage.yml@v1
+    with:
+      upload-to-codecov: true
     permissions:
       contents: read
       pull-requests: write
+    secrets:
+      codecov-token: ${{ secrets.CODECOV_TOKEN }}

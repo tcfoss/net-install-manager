@@ -8,7 +8,7 @@ import logging
 
 from net_install_manager.config.paths import Paths
 from net_install_manager.runtime.operating_system import OperatingSystem
-from net_install_manager.utilities.sh import exec_command, CommandOutput
+from net_install_manager.utilities.sh import CommandOutput, exec_command, exec_command_output
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +258,7 @@ class WindowsOsOps:
                     )
 
         cmd = ["cmd", "/c", "mklink", "/J", str(current_dir), str(target_version_dir)]
-        exec_command(cmd)
+        logger.info("%s", exec_command_output(cmd).strip())
         return current_dir
 
     @staticmethod

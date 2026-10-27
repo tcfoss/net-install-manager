@@ -1,5 +1,7 @@
 # Net Install Manager (`ninman`)
 
+[![codecov](https://codecov.io/gh/tcfoss/net-install-manager/graph/badge.svg?token=S0CPW2T35J)](https://codecov.io/gh/tcfoss/net-install-manager)
+
 `ninman` installs and manages versioned .NET console applications on Linux, macOS, and Windows. It can build from a project or Git repository, install local or GitHub release artifacts, and manage upgrades, rollbacks, and cleanup.
 
 **Documentation:** [tcfoss.github.io/net-install-manager](https://tcfoss.github.io/net-install-manager/)
