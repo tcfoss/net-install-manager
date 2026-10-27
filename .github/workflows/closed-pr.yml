@@ -19,6 +19,7 @@ jobs:
     uses: tcfoss/github-actions/.github/workflows/resolve-pr-work-items.yml@v1
     permissions:
       contents: read
+      pull-requests: write
     with:
       pull-request-description: ${{ github.event.pull_request.body }}
       api-url: ${{ vars.ISSUETRACKER_API_URL }}

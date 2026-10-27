@@ -209,21 +209,32 @@ def test_posix_remove_application_handles_app_named_versions(tmp_path):
     assert not bin_path.exists(follow_symlinks=False)
 
 
-def test_windows_update_current_link_generates_junction_command(tmp_path, monkeypatch):
+def test_windows_update_current_link_logs_junction_command_output(
+    tmp_path, monkeypatch, caplog
+):
     versions = tmp_path / "versions"
     (versions / "1.2.3").mkdir(parents=True)
     current = tmp_path / "application" / "current"
     commands = []
+
+    def fake_exec_command_output(command, **kwargs):
+        commands.append((command, kwargs))
+        return "Junction created for current <<===>> 1.2.3\r\n"
+
     monkeypatch.setattr(
         os_ops,
-        "exec_command",
-        lambda command, **kwargs: commands.append((command, kwargs)),
+        "exec_command_output",
+        fake_exec_command_output,
     )
 
-    result = os_ops.WindowsOsOps.update_current_link(versions, "1.2.3", current)
+    with caplog.at_level("INFO", logger=os_ops.__name__):
+        result = os_ops.WindowsOsOps.update_current_link(versions, "1.2.3", current)
 
     assert result == current
-    assert commands == [(["cmd", "/c", "mklink", "/J", str(current), str(versions / "1.2.3")], {})]
+    assert commands == [
+        (["cmd", "/c", "mklink", "/J", str(current), str(versions / "1.2.3")], {})
+    ]
+    assert "Junction created for current <<===>> 1.2.3" in caplog.text
 
 
 def test_windows_update_current_link_cleans_existing_nonempty_directory(tmp_path, monkeypatch):
@@ -237,6 +248,11 @@ def test_windows_update_current_link_cleans_existing_nonempty_directory(tmp_path
         os_ops,
         "exec_command",
         lambda command, **kwargs: commands.append((command, kwargs)),
+    )
+    monkeypatch.setattr(
+        os_ops,
+        "exec_command_output",
+        lambda command, **kwargs: commands.append((command, kwargs)) or "Junction created",
     )
 
     os_ops.WindowsOsOps.update_current_link(versions, "1.2.3", current)
