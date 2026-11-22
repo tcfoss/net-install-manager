@@ -12,7 +12,10 @@ from net_install_manager.core import errors
 def test_extract_git_source_delegates_with_build_options(runtime, monkeypatch):
     options = BuildOptions(debug_mode=True)
     source = app_sources.GitCodeAppSource(
-        "https://example.com/demo.git", "main", Path("App.csproj"), options,
+        "https://example.com/demo.git",
+        "main",
+        Path("App.csproj"),
+        options,
         runtime.home_dir / "cache",
     )
     parse = Mock(return_value=source)
@@ -26,9 +29,7 @@ def test_extract_git_source_delegates_with_build_options(runtime, monkeypatch):
 def test_extract_release_source_defaults_asset_pattern(runtime, asset_pattern):
     assert installation.extract_app_source(
         "owner:repo:v1.2.3", BuildOptions(), asset_pattern, runtime
-    ) == app_sources.GitHubReleaseAppSource(
-        "owner", "repo", asset_pattern or "{rid}-{version}", "v1.2.3"
-    )
+    ) == app_sources.GitHubReleaseAppSource("owner", "repo", asset_pattern or "{rid}", "v1.2.3")
 
 
 def test_extract_release_source_rejects_ambiguous_local_path(runtime, monkeypatch):
@@ -63,6 +64,7 @@ def test_extract_local_source_uses_project_or_build_directory(
     )
 
     assert source == (
-        app_sources.CodeAppSource(project, options) if has_project
+        app_sources.CodeAppSource(project, options)
+        if has_project
         else app_sources.BuiltAppSource(tmp_path)
     )
