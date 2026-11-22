@@ -47,7 +47,7 @@ def register_installation_options_arguments(parser: argparse.ArgumentParser) -> 
         "--asset-pattern",
         help=(
             "The pattern to determine the correct asset "
-            "(only used for GitHub Releases; defaults to '{rid}-{version}')"
+            "(only used for GitHub Releases; defaults to '{rid}')"
         ),
         default=None,
     )
@@ -136,7 +136,7 @@ def extract_app_source(
             raise errors.AmbiguousSourceError(given_source)
 
         owner, repo, tag = release_info
-        asset_pattern = asset_pattern or "{rid}-{version}"
+        asset_pattern = asset_pattern or "{rid}"
         return aps.GitHubReleaseAppSource(owner, repo, tag=tag, asset_pattern=asset_pattern)
 
     if given_source is not None:

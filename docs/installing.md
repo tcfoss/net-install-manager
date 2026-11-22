@@ -52,7 +52,7 @@ The app name and source binary are inferred from the project assembly name. For 
 
 ### GitHub Releases
 
-Use `owner:repo` to select the latest release, or `owner:repo:tag` to select a specific release. `ninman` needs to select a single release asset to download. If a release contains multiple assets, supply `--asset-pattern` to narrow the selection; it is a regular expression matched against asset names. The default pattern is `{rid}-{version}`. `{rid}`, `{os}`, `{arch}`, and `{version}` are substituted before matching, and exactly one asset must match. If the release has exactly one asset, you can use `--asset-pattern '.*'` to match it.
+Use `owner:repo` to select the latest release, or `owner:repo:tag` to select a specific release. `ninman` needs to select a single release asset to download. If a release contains multiple assets, supply `--asset-pattern` to narrow the selection; it is a regular expression matched against asset names. The default pattern is `{rid}`. `{rid}`, `{os}`, `{arch}`, and `{version}` are substituted before matching, and exactly one asset must match. If the release has exactly one asset, you can use `--asset-pattern '.*'` to match it.
 
 If the release archive does not contain a manifest, set `--source-binary-name` so `ninman` can find the executable or DLL in the artifact. The launcher and directory names are derived from it unless you override them. For example, when the release has exactly one asset:
 
